@@ -17,7 +17,7 @@ This libraries intent is to provide the tools and infrastructure to develop more
 * API
   * High-level of abstraction for simple programming
   * Custom plugin syntax - extensible
-  *Orchestration of data, model building and evaluation
+  * Orchestration of data, model building and evaluation
 * Data
   * Financial Modeling Prep
   * Bring your own data (BYOD)
@@ -32,7 +32,7 @@ This libraries intent is to provide the tools and infrastructure to develop more
   * Order types
   * Signals
 * Backtest
-  * Minimize input parameter sensitivity
+  * Event driven
 * Portfolio
   * Multi-asset
   * Multi-strategy
@@ -45,7 +45,8 @@ This libraries intent is to provide the tools and infrastructure to develop more
   * Parameter sensitivity 
 * Optimization using Bayesian and evolutionary algorithms
   * Feature importance
-  * 
+  * Parameter sensitivity
+    
 # Status
 
 This library is under active development and does not contain a stable release yet
