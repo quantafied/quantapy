@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+quantapy/__init__.py
+quantapy.egg-info/PKG-INFO
+quantapy.egg-info/SOURCES.txt
+quantapy.egg-info/dependency_links.txt
+quantapy.egg-info/top_level.txt
