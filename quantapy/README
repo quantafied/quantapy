@@ -1,0 +1,11 @@
+The main structure of the codebase is as follows:
+
+handler             -> orchestrator
+    base            -> core
+        subclass A  -> modules
+        subclass B  -> modules
+
+instance = orchestrator()
+instance.method("registry_category","registry_function",**kwargs)
+
+
