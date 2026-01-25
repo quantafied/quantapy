@@ -2,7 +2,7 @@
 
 # QuantaPy
 
-Python library for quantitative trading research, strategy development, and backtesting with an emphasis on developing robust models considering uncertainty. 
+QuantaPy is a Python library for quantitative trading research, strategy development, and backtesting with an emphasis on developing robust models considering uncertainty. 
 
 # Motivation
 
@@ -12,6 +12,40 @@ Automated trading and market strategy models developed using historical backtest
 
 This libraries intent is to provide the tools and infrastructure to develop more useful models with better assumptions and probablistic model development. 
 
+# Features
+
+* API
+  * High-level of abstraction for simple programming
+  * Custom plugin syntax - extensible
+  *Orchestration of data, model building and evaluation
+* Data
+  * Financial Modeling Prep
+  * Bring your own data (BYOD)
+  * Data augmentation
+  * Synthetic data
+* Transformations
+  * Technical indicators
+  * Math
+  * Vector operations
+* Strategy
+  * Multi-asset
+  * Order types
+  * Signals
+* Backtest
+  * Minimize input parameter sensitivity
+* Portfolio
+  * Multi-asset
+  * Multi-strategy
+* Evaluation
+  * Portfolion metrics
+  * Individual strategy metrics
+  * Metric aggregation
+  * Cross validation
+  * Identification of failure modes 
+  * Parameter sensitivity 
+* Optimization using Bayesian and evolutionary algorithms
+  * Feature importance
+  * 
 # Status
 
 This library is under active development and does not contain a stable release yet
