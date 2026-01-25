@@ -1,6 +1,7 @@
 ![Quantapy Logo](https://github.com/quantafied/quantapy/blob/main/quantapy_logo.png)
 
-# quantapy
+# QuantaPy
+
 QuantaPy: Python library for quantitative trading research, strategy development, and backtesting.
 
 This library is under active development and does not contain a stable release yet
