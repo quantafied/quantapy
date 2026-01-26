@@ -1,0 +1,19 @@
+site_name: QuantaPy
+site_description: Uncertainty-aware quantitative research framework
+
+theme:
+  name: readthedocs
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+
+nav:
+  - Home: index.md
+  - API:
+      - Data: api/data.md
+

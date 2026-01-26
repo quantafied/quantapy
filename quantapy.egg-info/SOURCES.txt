@@ -12,7 +12,6 @@ quantapy/gui/target_cli.py
 quantapy/orchestrator/__init__.py
 quantapy/orchestrator/calculator.py
 quantapy/orchestrator/data.py
-quantapy/orchestrator/models.py
 quantapy/orchestrator/simulate.py
 quantapy/orchestrator/strategy.py
 quantapy/orchestrator/study.py
