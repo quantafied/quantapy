@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
 import pandas as pd
 from typing import List,Union,Type
-from pydantic import BaseModel,Field
 from typing import Any, Dict, Union
 
 

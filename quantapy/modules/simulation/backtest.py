@@ -7,32 +7,21 @@ Created on Sun Jun 22 10:08:30 2025
 """
 
 import sys
-sys.path.append("/home/andrewsimin/automating_alpha/v0.0.3")
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List, Union
-#from tradinglib.gui.pydantic_form import single_model, list_of_models
 import pandas as pd
 import optuna
-from tradinglib.modules.evaluation.metrics import *
+from quantapy.modules.evaluation.metrics import *
 from joblib import Parallel, delayed
 
-#import calculator
-
-from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
 import pandas as pd
 from typing import List,Union,Type
-from pydantic import BaseModel,Field
-from tradinglib.core.base_simulation import BaseSimulation
-from tradinglib.registry.component_registry import register_component
+from quantapy.core.base_simulation import BaseSimulation
+from quantapy.registry.component_registry import register_component
 
-#from tradinglib.modules.study.validation import permute_trades, gaussian_noise
-import tradinglib.modules.calculator.technical
+import quantapy.modules.calculator.technical
 
-#from tradinglib.modules.simulation.backtest import RobustBacktest
-    
 @register_component(category="Simulation", function="Backtest", source="Internal")
 class Backtest(BaseSimulation):
     

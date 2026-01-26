@@ -6,33 +6,29 @@ Created on Thu Jun  5 23:55:06 2025
 @author: andrewsimin
 """
 
-#import sys
-#sys.path.append("/home/andrewsimin/automating_alpha")
-
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List
-from tradinglib.modules.evaluation.metrics import *
+from quantapy.modules.evaluation.metrics import *
 import numpy as np
 
 
 # Composition Classes - can not be extended themselves, only their submodules can
-from tradinglib.orchestrator.data import Data
-from tradinglib.orchestrator.calculator import Calculator
-from tradinglib.orchestrator.strategy import Strategy
-from tradinglib.orchestrator.simulate import Simulate
-from tradinglib.orchestrator.study import Study
+from quantapy.orchestrator.data import Data
+from quantapy.orchestrator.calculator import Calculator
+from quantapy.orchestrator.strategy import Strategy
+from quantapy.orchestrator.simulate import Simulate
+from quantapy.orchestrator.study import Study
 
 """We need to mutate parameters before sending to any parallel function"""
 
-    
-#load_plugins_from_folder("/home/andrewsimin/tradinglib/plugins")
-load_plugins_from_folder("/home/andrewsimin/automating_alpha/v0.0.3/tradinglib/modules/strategy")
-load_plugins_from_folder("/home/andrewsimin/automating_alpha/v0.0.3/tradinglib/modules/simulation")
-load_plugins_from_folder("/home/andrewsimin/automating_alpha/v0.0.3/tradinglib/modules/data")
-load_plugins_from_folder("/home/andrewsimin/automating_alpha/v0.0.3/tradinglib/modules/calculator")
-load_plugins_from_folder("/home/andrewsimin/automating_alpha/v0.0.3/tradinglib/modules/study")
+print("Imports successful")
+load_plugins_from_folder("/home/andrewsimin/quantapy/quantapy/modules/strategy")
+print("First plugin loaded")
+load_plugins_from_folder("/home/andrewsimin/quantapy/quantapy/modules/simulation")
+load_plugins_from_folder("/home/andrewsimin/quantapy/quantapy/modules/data")
+load_plugins_from_folder("/home/andrewsimin/quantapy/quantapy/modules/calculator")
+load_plugins_from_folder("/home/andrewsimin/quantapy/quantapy/modules/study")
 
 print(COMPONENT_REGISTRY)
 

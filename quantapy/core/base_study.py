@@ -7,49 +7,7 @@ Created on Mon May 19 20:02:51 2025
 """
 
 from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
 import pandas as pd
-from pydantic import BaseModel,Field
-from typing import List,Union,Type
-
-class BaseStudies(ABC):
-    
-    config_class: Type[BaseModel] = None
-    
-    "We need a strategy object to define the inputs of the simulation"
-
-    def __init__(self, simulation = None, config: Union[BaseModel, dict, None] = None, optimizable = None, **kwargs):
-        self.payload = config if isinstance(config, dict) and "config_values" in config else None
-
-        if self.config_class is None:
-            raise NotImplementedError(f"{self.__class__.__name__} must define `config_class`.")
-        
-        if isinstance(config, self.config_class):
-            final_config = config
-        elif isinstance(config, dict):
-            values = config["config_values"] if "config_values" in config else config
-            final_config = self.config_class(**values)
-        elif kwargs:
-            final_config = self.config_class(**kwargs)
-        else:
-            final_config = self.config_class()
-
-        self.config = final_config
-        self.simulation = simulation
-        print(self.simulation.strategy.calculator)
-        #self.calculator = strategy.calculator
-        
-    
-        
-    @abstractmethod
-    def execute(self):
-        
-        pass
-    
-from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
-import pandas as pd
-from pydantic import BaseModel,Field
 from typing import List, Union, Type, Any, Dict, Union
 
 class BaseStudy(ABC):

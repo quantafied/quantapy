@@ -7,11 +7,9 @@ Created on Mon Jun 23 20:51:01 2025
 """
 
 import talib
-from tradinglib.core.base_study import BaseStudy
-from tradinglib.registry.component_registry import register_component
-from tradinglib.core.base_component import BaseComponentConfig
+from quantapy.core.base_study import BaseStudy
+from quantapy.registry.component_registry import register_component
 import pandas as pd
-from pydantic import BaseModel,Field
 import numpy as np
 from typing import List,Union,Type
 import random
@@ -29,35 +27,9 @@ json_schema_exra:
 # We only define GUI parameters in the config and all else in the 
 # actual function
 
-class DistanceConfig(BaseComponentConfig):
-    """ Configuration schema for Bollinger Bands technical indicator"""
-    
-#    pareto_solutions: np.ndarray = Field(
-#        default = np.array([]), 
-#        description="Pareto optimal solutions", 
-#        json_schema_extra={"advanced": False,
-#                           }
-#    )
-    
-#    objectives: list[str] = Field(
-#        default = ["max"], 
-#        description="Objective directions", 
-#        json_schema_extra={"advanced": False,
-#                           }
-#    )
-    
-    weights: list[float] = Field(
-        default = [1.0], 
-        description="Weights for optimal solutions", 
-        json_schema_extra={"advanced": False,
-                           }
-    )
-
 @register_component(category="Best Trial", function="Distance from Ideal", source="Internal")
 class weighted_euclidean_distance_to_ideal():
     
-    config_class = DistanceConfig
-
     def execute(self, 
                 pareto_solutions: np.array, 
                 objectives: list[str] = ["max"], 

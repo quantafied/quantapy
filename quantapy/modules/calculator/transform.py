@@ -13,39 +13,6 @@ Created on Mon Mar  3 00:01:38 2025
 import inspect
 import pandas as pd
 
-
-#class Transform():
-    
-#    """
-#    Apply transformation to pandas DataFrame
-#    """
-    
-#    def __init__(self, data):
-#        self.data = data
-        
-#    def compute(self, *args, **kwargs):
-#        self.function = args[0]
-#        self.func = FUNCTION_REGISTRY[self.function]["function"]
-
-#        # Inspect function parameters
-#        func_signature = inspect.signature(self.func)
-#        bound_args = func_signature.bind(*args, **kwargs)
-#        bound_args.apply_defaults()
-#        self.runtime_args = {key: value for key, value in bound_args.arguments.items()}
-        
-#        # Remove 'data' key since it's passed separately
-#        del self.runtime_args["data"]
-
-#        # Compute the transformation
-#        result = self.func(self.data, **kwargs)
-
-#        # Store results in DataFrame
-#        for i, (key, value) in enumerate(result.items()):
-#            self.data[self.runtime_args["output_names"][i]] = value
-        
-#    def optimization_bounds(self, bounds):
-#        self.bounds = bounds
-        
 class CustomDataFrame(pd.DataFrame):
     
     """

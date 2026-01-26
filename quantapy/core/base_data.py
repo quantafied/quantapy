@@ -1,40 +1,5 @@
 from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
 import pandas as pd
-from typing import List,Union,Type
-from pydantic import BaseModel,Field
-#from tradinglib.core.base_constructor import BaseConstructor
-
-class BaseDataOG(ABC):
-    
-    config_class: Type[BaseModel] = None
-
-    def __init__(self, config: Union[BaseModel, dict, None] = None, **kwargs):
-        self.payload = config if isinstance(config, dict) and "config_values" in config else None
-
-        if self.config_class is None:
-            raise NotImplementedError(f"{self.__class__.__name__} must define `config_class`.")
-        
-        if isinstance(config, self.config_class):
-            final_config = config
-        elif isinstance(config, dict):
-            values = config["config_values"] if "config_values" in config else config
-            final_config = self.config_class(**values)
-        elif kwargs:
-            final_config = self.config_class(**kwargs)
-        else:
-            final_config = self.config_class()
-
-        self.config = final_config
-
-    @abstractmethod
-    def fetch(self,*args,**kwargs) -> pd.DataFrame:
-        pass
-    
-from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
-import pandas as pd
-from pydantic import BaseModel,Field
 from typing import List, Union, Type, Any, Dict, Union
 
 class BaseData(ABC):

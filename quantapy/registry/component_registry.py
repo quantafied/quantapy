@@ -1,4 +1,4 @@
-from tradinglib.registry.constants import VALID_COMPONENT_CATEGORIES
+from quantapy.registry.constants import VALID_COMPONENT_CATEGORIES
 
 COMPONENT_REGISTRY = {}
 

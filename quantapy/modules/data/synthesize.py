@@ -2,18 +2,13 @@
 
 
 import talib
-from tradinglib.core.base_data import BaseData
-from tradinglib.registry.component_registry import register_component
-from tradinglib.core.base_component import BaseComponentConfig
+from quantapy.core.base_data import BaseData
+from quantapy.registry.component_registry import register_component
 import pandas as pd
-from pydantic import BaseModel,Field
 import numpy as np
-from typing import List,Union,Type,Dict
+from typing import List,Union,Type,Dict,Any
 import random
-
 import inspect
-from pydantic import Field, create_model
-from typing import Any, Type
 
 # This should be moved since permutation acts on backtest results
 @register_component(category="Noise", function="Trade Permutation", source="Internal")

@@ -1,11 +1,9 @@
 # app/ta_functions.py
 
 import talib
-from tradinglib.core.base_study import BaseStudy
-from tradinglib.registry.component_registry import register_component
-from tradinglib.core.base_component import BaseComponentConfig
+from quantapy.core.base_study import BaseStudy
+from quantapy.registry.component_registry import register_component
 import pandas as pd
-from pydantic import BaseModel,Field
 import numpy as np
 from typing import List,Union,Type
 import random
@@ -19,27 +17,27 @@ json_schema_exra:
     in an advanced dropdown container
 """
 
-class BayesianOptConfig(BaseComponentConfig):
-    """ Configuration schema for Bollinger Bands technical indicator"""
-    
-    objectives: List[str] = Field(
-        default_factory=list, 
-        json_schema_extra={"options": ["Maximize Profit",
-                                       "Minimize Profit",
-                                       "Maximize Sharpe Ratio", 
-                                       "Minimize Sharpe Ratio", 
-                                       "Maximize CAGR",
-                                       "Minimize CAGR"], 
-                           "widget_type": "multiselect"
-                           }
-    )
-    
-    trials: int = Field(
-        default = 25, 
-        description="Number of optimization trials", 
-        json_schema_extra={"advanced": False,
-                           }
-    )
+#class BayesianOptConfig(BaseComponentConfig):
+#    """ Configuration schema for Bollinger Bands technical indicator"""
+#    
+#    objectives: List[str] = Field(
+#        default_factory=list, 
+#        json_schema_extra={"options": ["Maximize Profit",
+#                                       "Minimize Profit",
+#                                       "Maximize Sharpe Ratio", 
+#                                       "Minimize Sharpe Ratio", 
+#                                       "Maximize CAGR",
+#                                       "Minimize CAGR"], 
+#                           "widget_type": "multiselect"
+#                           }
+#    )
+#    
+#    trials: int = Field(
+#        default = 25, 
+#        description="Number of optimization trials", 
+#        json_schema_extra={"advanced": False,
+#                           }
+#    )
     
 @register_component(category="Optimization", function="Bayesian", source="Internal")
 class bayesian(BaseStudy):
@@ -182,10 +180,10 @@ class bayesian(BaseStudy):
             
         return simulation_results, evaluator_results, metrics
 
-class WrightedDistanceConfig(BaseComponentConfig):
-    """ Configuration schema for Bollinger Bands technical indicator"""
-    
-    "My Schema Here"
+#class WrightedDistanceConfig(BaseComponentConfig):
+#    """ Configuration schema for Bollinger Bands technical indicator"""
+#    
+#    "My Schema Here"
     
 @register_component(category="Optimization", function="Weighted Distance to Ideal", source="Internal")
 def weighted_euclidean_distance_to_ideal_test(study_obj, weights):

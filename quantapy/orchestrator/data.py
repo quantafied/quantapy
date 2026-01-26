@@ -1,8 +1,6 @@
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List, Union
-#from tradinglib.gui.pydantic_form import single_model, list_of_models
 import pandas as pd
 
 #import calculator
@@ -15,21 +13,21 @@ class Data():
         self.synthetic_data_objects = {}
         self.data = {}
         
-    def add(self, category: str, name: str, source: str, config: Union[BaseModel, None] = None, **kwargs):
+    def add(self, category: str, name: str, source: str, **kwargs):
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[category][name][source]
         print(transform_class)
-        data_s_instance = transform_class(config=config, **kwargs)
+        data_s_instance = transform_class(**kwargs)
     
         self.data_objects[name] = data_s_instance
         
-    def add_synthetic(self, category: str, name: str, source: str, config: Union[BaseModel, None] = None, **kwargs):
+    def add_synthetic(self, category: str, name: str, source: str, **kwargs):
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[category][name][source]
         print(transform_class)
-        data_s_instance = transform_class(config=config, **kwargs)
+        data_s_instance = transform_class(**kwargs)
     
         self.synthetic_data_objects[name] = data_s_instance
         

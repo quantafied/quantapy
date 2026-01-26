@@ -12,11 +12,9 @@ Created on Sun May 25 10:00:15 2025
 # Calculator is a non extendable component and is primarily for managing 
 # multiple transformation components which are extendable
 
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List, Union
-#from tradinglib.gui.pydantic_form import single_model, list_of_models
 import pandas as pd
 import streamlit as st
 import json
@@ -44,7 +42,7 @@ class Calculator():
         self.overlay_names = []
         self.indicator_names = []
         
-    def add_transform(self, registered: str, function: str, source: str = "Internal", config: Union[BaseModel, None] = None, **kwargs):
+    def add_transform(self, registered: str, function: str, source: str = "Internal", **kwargs):
         
         """Class to add transformations to raw input data. This operates on every raw dataframe in the datawarehouse (original and synthetic)"""
         

@@ -12,16 +12,13 @@ Created on Wed Jun 11 22:09:29 2025
 # Calculator is a non extendable component and is primarily for managing 
 # multiple transformation components which are extendable
 
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List, Union
-#from tradinglib.gui.pydantic_form import single_model, list_of_models
 import pandas as pd
 import optuna
-from tradinglib.modules.evaluation.metrics import *
+from quantapy.modules.evaluation.metrics import *
 import json
-import streamlit as st
 
 #import calculator
         
@@ -41,7 +38,7 @@ class Strategy():
         self.position = [False]
         self.open_orders = [False]
 
-    def add(self, registered: str, function: str, source: str = "Internal", config: Union[BaseModel, None] = None, **kwargs):
+    def add(self, registered: str, function: str, source: str = "Internal", **kwargs):
         strategy_class = COMPONENT_REGISTRY[registered][function][source]
         instance = strategy_class(config=config, **kwargs)
         

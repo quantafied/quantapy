@@ -7,11 +7,9 @@ Created on Mon Jun 23 20:51:01 2025
 """
 
 import talib
-from tradinglib.core.base_study import BaseStudy
-from tradinglib.registry.component_registry import register_component
-from tradinglib.core.base_component import BaseComponentConfig
+from quantapy.core.base_study import BaseStudy
+from quantapy.registry.component_registry import register_component
 import pandas as pd
-from pydantic import BaseModel,Field
 import numpy as np
 from typing import List,Union,Type
 import random

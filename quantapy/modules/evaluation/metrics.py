@@ -1,37 +1,21 @@
-from tradinglib.registry.component_registry import COMPONENT_REGISTRY
-from tradinglib.utils.loader import load_plugins_from_folder
-from pydantic import BaseModel
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.utils.loader import load_plugins_from_folder
 from typing import get_args, get_origin, List, Union
-#from tradinglib.gui.pydantic_form import single_model, list_of_models
 import pandas as pd
 import optuna
-from tradinglib.modules.evaluation.metrics import *
+from quantapy.modules.evaluation.metrics import *
 
-#import calculator
 
 from abc import ABC, abstractmethod
-from tradinglib.core.base_component import BaseComponentConfig
 import pandas as pd
 from typing import List,Union,Type
-from pydantic import BaseModel,Field
-from tradinglib.core.base_simulation import BaseSimulation
-from tradinglib.registry.component_registry import register_component
+from quantapy.core.base_simulation import BaseSimulation
+from quantapy.registry.component_registry import register_component
 import pyfolio as pf
 import pandas as pd
 
-
-class PortfolioConfig(BaseComponentConfig):
-    """ Configuration schema for Simple Moving Average technical indicator"""
-    
-    metrics: str = Field(
-        default="all", 
-        description="Initial investment", 
-    )
-    
 @register_component(category="Evaluate", function="Portfolio", source="Internal")
 class Portfolio(BaseSimulation):
-    
-    config_class = PortfolioConfig  # Exposed for Streamlit or other tools   
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
