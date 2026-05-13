@@ -20,6 +20,8 @@ QuantaPy aims to provide the tools and infrastructure needed to develop **more u
 
 # Features
 
+Testing
+
 * API
   * High-level of abstraction for simple programming
   * Custom plugin syntax - extensible
