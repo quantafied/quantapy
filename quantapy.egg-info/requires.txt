@@ -1,0 +1,8 @@
+numpy
+pandas
+joblib
+optuna
+TA-Lib
+requests
+scikit-learn
+matplotlib

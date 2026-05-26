@@ -15,6 +15,49 @@ def random_hex_color():
 @register_component(category="Technical", function="Moving Average", source="Internal")
 class sma(BaseTransform):
     
+    config = {
+        "title": "Simple Moving Average",
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "default": "SMA",
+                "description": "Name of the transformation",
+                "advanced": False
+            },
+            "real": {
+                "type": "string",
+                "default": "close",
+                "description": "Price column to average",
+                "enum": ["close", "open", "high", "low"],
+                "widget_type": "select",
+                "advanced": False
+            },
+            "timeperiod": {
+                "type": "integer",
+                "default": 20,
+                "description": "Period for moving average",
+                "advanced": False,
+                "optimizable": {"min": 2, "max": 200}
+            },
+            "output_names": {
+                "type": "object",
+                "title": "Output Names",
+                "properties": {
+                    "output": {"type": "string", "default": "sma"}
+                }
+            },
+            "display": {
+                "type": "string",
+                "default": "Overlay",
+                "description": "Display type",
+                "enum": ["Overlay", "Indicator"],
+                "widget_type": "select",
+                "advanced": False
+            },
+        }
+    }
+    
     def compute(self, df: pd.DataFrame):
     
         real_col = self.params["real"]

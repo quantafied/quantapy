@@ -1,95 +1,188 @@
-from quantapy.registry.component_registry import COMPONENT_REGISTRY
-from quantapy.utils.loader import load_plugins_from_folder
-from typing import Dict, Any
+"""
+Generic data orchestrator supporting batch and streaming workflows.
+
+Design principles:
+- Domain-agnostic: works with financial data, time series, sensor data, etc.
+- Columnar: TimeSeries uses NumPy arrays for efficiency
+- Composable: providers → fetch, transformers → transform, explicit store commit
+- Streaming-ready: designed to support append operations and streaming sinks
+"""
+from typing import Dict, Any, Optional, List, Union
 import pandas as pd
+import numpy as np
+
+from quantapy.registry.component_registry import COMPONENT_REGISTRY
+from quantapy.core.timeseries import TimeSeries
 
 
 class Data:
     """
-    Orchestrator class for managing and fetching market and synthetic data.
-
-    The Data class is responsible for:
-    - Registering raw data components (e.g. OHLC, order book data)
-    - Registering synthetic or augmented data generators
-    - Executing data pipelines and returning structured results
-
-    Data components are dynamically loaded from the COMPONENT_REGISTRY
-    and instantiated based on category, name, and source.
+    Generic data orchestrator for batch and streaming workflows.
+    
+    Supports:
+    - add_provider(): register data sources (FMP, CSV, database, Kafka, etc.)
+    - add_transformer(): register transformations (synthetic, indicators, normalization, etc.)
+    - fetch(): execute all providers and return named outputs
+    - transform(): apply transformations and return named outputs
+    - ingest(): wrap manually supplied data as a named output
+    - stream(): (future) subscribe to streaming data sources
+    
+    Example (financial):
+        data = Data()
+        data.add_provider("Market", "OHLC", "FMP", source_ids=["AAPL", "GOOGL"], date_range="2020-2024")
+        data.add_transformer("Augmentation", "GaussianNoise", "Internal", n_trajectories=10, stddev=0.01)
+        fetched = data.fetch()
+        synthetic = data.transform("OHLC_AAPL", fetched["OHLC_AAPL"])
+    
+    Example (time series):
+        data = Data()
+        data.add_provider("Sensors", "Temperature", "CSV", path="/data/temps.csv")
+        data.add_transformer("Analysis", "Normalize", "Internal")
+        fetched = data.fetch()
+        normalized = data.transform("Temperature", fetched["Temperature"])
     """
 
-    def __init__(self) -> None:
-        """
-        Initialize the Data orchestrator.
+    def __init__(self):
+        self.providers = []
+        self.transformers = []
 
-        Attributes:
-            data_objects (dict): Mapping of data name to raw data component instances.
-            synthetic_data_objects (dict): Mapping of synthetic data name to generator instances.
-            data (dict): Nested dictionary storing fetched raw and synthetic data outputs.
+    def add_provider(self, category: str, name: str, source: str, **kwargs) -> None:
         """
-        self.data_objects: Dict[str, Any] = {}
-        self.synthetic_data_objects: Dict[str, Any] = {}
-        self.data: Dict[str, Dict[str, pd.DataFrame]] = {}
-
-    def add(self, category: str, name: str, source: str, **kwargs) -> None:
-        """
-        Add a raw data component to the data pipeline.
-
+        Register a data provider.
+        
         Args:
-            category (str): Component category (e.g. "historical", "market").
-            name (str): Component name (e.g. "OHLC").
-            source (str): Data source identifier (e.g. "Internal", "FMP").
-            **kwargs: Keyword arguments passed to the component constructor.
-
-        Raises:
-            KeyError: If the specified component is not found in the registry.
+            category: Provider category (e.g., "Market", "Sensors", "Weather")
+            name: Provider name (e.g., "OHLC", "Temperature", "Precipitation")
+            source: Provider source/implementation (e.g., "FMP", "CSV", "Kafka")
+            **kwargs: Provider-specific parameters (source_ids, date_range, path, etc.)
         """
-        transform_class = COMPONENT_REGISTRY[category][name][source]
-        data_instance = transform_class(**kwargs)
-        self.data_objects[name] = data_instance
+        cls = COMPONENT_REGISTRY[category][name][source]
+        self.providers.append((name, cls(**kwargs)))
 
-    def add_synthetic(self, category: str, name: str, source: str, **kwargs) -> None:
+    def add_transformer(self, category: str, name: str, source: str, **kwargs) -> None:
         """
-        Add a synthetic or augmented data generator.
-
-        Synthetic data generators are applied to raw data outputs
-        if the raw data component is marked as synthesizable.
-
+        Register a transformer/synthesizer.
+        
         Args:
-            category (str): Component category.
-            name (str): Synthetic data name (e.g. "GaussianNoise").
-            source (str): Synthetic data source identifier.
-            **kwargs: Keyword arguments passed to the component constructor.
+            category: Transformer category (e.g., "Augmentation", "Analysis", "Feature")
+            name: Transformer name (e.g., "GaussianNoise", "Normalize", "MovingAverage")
+            source: Transformer source/implementation (e.g., "Internal", "TensorFlow")
+            **kwargs: Transformer-specific parameters (n_trajectories, stddev, window_size, etc.)
         """
-        transform_class = COMPONENT_REGISTRY[category][name][source]
-        synthetic_instance = transform_class(**kwargs)
-        self.synthetic_data_objects[name] = synthetic_instance
+        cls = COMPONENT_REGISTRY[category][name][source]
+        self.transformers.append((name, cls(**kwargs)))
 
-    def fetch_data(self) -> Dict[str, Dict[str, pd.DataFrame]]:
+    def fetch(self) -> Dict[str, Any]:
         """
-        Execute all registered data components and return fetched data.
-
-        For each raw data component:
-        - Fetch raw data via `execute()`
-        - Optionally apply all registered synthetic generators
-
+        Execute all registered providers and return named outputs.
+        
+        Providers are expected to return:
+        - Dict[source_id, List[Dict]]
+        - Dict[source_id, TimeSeries]
+        - Dict[source_id, DataFrame]
+        
         Returns:
-            dict: Nested dictionary structured as:
-                {
-                    "<data_name>": {
-                        "Raw": pd.DataFrame,
-                        "<synthetic_name>": pd.DataFrame
-                    }
-                }
+            Dict mapping dataset names to provider outputs.
         """
-        for data_name, data_object in self.data_objects.items():
-            self.data[data_name] = {}
+        outputs = {}
 
-            raw_data = data_object.execute()
-            self.data[data_name]["Raw"] = raw_data
+        for provider_name, provider_obj in self.providers:
+            result = provider_obj.execute()
 
-            if getattr(data_object, "synthesizable", False):
-                for synthetic_name, synthetic_object in self.synthetic_data_objects.items():
-                    synthetic_data = synthetic_object.execute(raw_data)
-                    self.data[data_name][synthetic_name] = synthetic_data
+            if isinstance(result, dict):
+                for source_id, data in result.items():
+                    dataset_name = f"{provider_name}_{source_id}"
+                    outputs[dataset_name] = data
+            else:
+                # Single dataset result
+                outputs[provider_name] = result
 
-        return self.data
+        return outputs
+
+    def transform(
+        self,
+        dataset_name: str,
+        data: Union[TimeSeries, np.ndarray, pd.DataFrame, List[Dict]],
+        transformer_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Apply transformer(s) to a dataset and return named outputs.
+        
+        Transformers are expected to:
+        - Accept Dict[dataset_name, List[TimeSeries]] via execute()
+        - Return Dict[dataset_name, List[TimeSeries]] with transformed data
+        
+        Multiple trajectories (e.g., 10 synthetic versions) are indexed: 
+        "dataset-Transformer-0", "dataset-Transformer-1", etc.
+        
+        Args:
+            dataset_name: Name to use for the source dataset.
+            data: Source data to transform.
+            transformer_name: Specific transformer to apply. If None, apply all.
+        
+        Returns:
+            Dict mapping output names to transformed outputs.
+        """
+        ts = TimeSeries.from_dataframe(data) if isinstance(data, pd.DataFrame) else data
+        outputs_by_name = {}
+
+        # select transformers to apply
+        xforms_to_apply = [
+            t for t in self.transformers
+            if transformer_name is None or t[0] == transformer_name
+        ]
+
+        for xform_name, xform_obj in xforms_to_apply:
+            # Execute transformer
+            # Transformers work with TimeSeries or DataFrames
+            try:
+                # Try TimeSeries-aware interface first
+                result = xform_obj.execute({dataset_name: [ts]})
+            except (TypeError, AttributeError):
+                # Fall back to DataFrame-based interface
+                try:
+                    result = xform_obj.execute({dataset_name: [ts.to_dataframe()]})
+                except TypeError as e:
+                    raise TypeError(
+                        f"Transformer {xform_name} signature mismatch. "
+                        f"Expected execute(dict[name, list[data]]), got error: {e}"
+                    )
+
+            # Store results
+            if isinstance(result, dict) and dataset_name in result:
+                outputs = result[dataset_name]
+                if isinstance(outputs, list):
+                    for i, output in enumerate(outputs):
+                        # Generate output name with index if multiple trajectories
+                        output_name = (
+                            f"{dataset_name}-{xform_name}-{i}"
+                            if len(outputs) > 1
+                            else f"{dataset_name}-{xform_name}"
+                        )
+                        outputs_by_name[output_name] = output
+                else:
+                    # Single output
+                    outputs_by_name[f"{dataset_name}-{xform_name}"] = outputs
+
+        return outputs_by_name
+
+    def ingest(
+        self, name: str, data: Union[TimeSeries, np.ndarray, pd.DataFrame, List[Dict]]
+    ) -> Dict[str, Union[TimeSeries, np.ndarray, pd.DataFrame, List[Dict]]]:
+        """
+        Return manually supplied data as a named output.
+        
+        Accepts:
+        - TimeSeries: stored directly
+        - NumPy array: converted to TimeSeries with auto-generated column names
+        - DataFrame: converted to TimeSeries
+        - List of dicts: converted to TimeSeries
+        
+        Args:
+            name: Dataset name.
+            data: Data in any supported format.
+        
+        Returns:
+            Dict mapping the supplied name to data.
+        """
+        return {name: data}

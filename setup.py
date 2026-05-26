@@ -11,6 +11,16 @@ setup(
     author="Andrew Simin",
     author_email="contact.quantafied@gmail.com",
     license="Apache-2.0",
+    install_requires=[
+    "numpy",
+    "pandas",
+    "joblib",
+    "optuna",
+    "TA-Lib",
+    "requests",
+    "scikit-learn",
+    "matplotlib"
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",

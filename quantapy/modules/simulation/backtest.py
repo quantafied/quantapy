@@ -6,21 +6,9 @@ Created on Sun Jun 22 10:08:30 2025
 @author: andrewsimin
 """
 
-import sys
-from quantapy.registry.component_registry import COMPONENT_REGISTRY
-from quantapy.utils.loader import load_plugins_from_folder
-from typing import get_args, get_origin, List, Union
 import pandas as pd
-import optuna
-from quantapy.modules.evaluation.metrics import *
-from joblib import Parallel, delayed
-
-import pandas as pd
-from typing import List,Union,Type
 from quantapy.core.base_simulation import BaseSimulation
 from quantapy.registry.component_registry import register_component
-
-import quantapy.modules.calculator.technical
 
 @register_component(category="Simulation", function="Backtest", source="Internal")
 class Backtest(BaseSimulation):
@@ -46,53 +34,40 @@ class Backtest(BaseSimulation):
       }
     }
 
-    def generate_signals(self,data,strategy):
-        
-        # Pass in single dataframe and strategy object
-        
-        
-        # need to reset calculator data from __init__ since these are dynmically called
-        # for each optimization trial 
-
+    def generate_signals(self, data, strategy):
         constraints = strategy.constraints
+        date_col = "date" if "date" in data.columns else None
+        simulation_outputs = pd.DataFrame({
+            "date": data[date_col] if date_col else data.index
+        })
+        signals = ["no action"] * len(data)
+        strategy.event_signals = []
 
-        
-        start = data.index[0]
-        end = data.index[-1]
-        #if self.end == -1:
-        #    self.end = len(self.transformed_data)
-            
-        simulation_outputs = pd.DataFrame(data["date"].iloc[start:end])
-        
-        # Should we take out of __init__ ? Issue with updates because of append
-        event_signals = []
-        
-        #for i in range(self.start, len(self.transformed_data)):  # Loop over time
-        for i in range(start, end):  # Loop over time
-        
+        for i in range(1, len(data)):
             entry_constraints = []
             exit_constraints = []
 
-            for constraint in constraints: # Loop over constraints
-                
+            for constraint in constraints:
                 output, action, direction = constraint.check(data, i)
-                #print(output)
-                
                 if action == "enter":
                     entry_constraints.append(output)
                 elif action == "exit":
                     exit_constraints.append(output)
                 
-            if entry_constraints and all(entry_constraints):  # New method
-                event_signals.append("enter")
-            elif exit_constraints and all(exit_constraints):  # New method
-                event_signals.append("exit")
-            else:
-                event_signals.append("no action")
-        
-        #print(self.event_signals)
-        #self.transformed_data["signal"] = self.event_signals
-        simulation_outputs["signal"] = event_signals
+            if entry_constraints and all(entry_constraints):
+                signals[i] = "enter"
+            elif exit_constraints and all(exit_constraints):
+                signals[i] = "exit"
+
+            if signals[i] != "no action":
+                strategy.event_signals.append({
+                    "index": i,
+                    "action": signals[i],
+                    "direction": "long",
+                    "price": data.loc[i, "close"] if "close" in data.columns else None,
+                })
+
+        simulation_outputs["signal"] = signals
         
         return simulation_outputs
                 
@@ -109,37 +84,44 @@ class Backtest(BaseSimulation):
         
         cash = initial_investment
         position = 0  # shares held
+        entry_index = None
+        entry_price = None
         portfolio_values = []
         actions = []
         positions = []
+        strategy.trades = []
         
-        start = data.index[0]
-        end = data.index[-1]
-        
-        for i in range(start,end):
-            #signal = self.transformed_data.loc[i, "signal"]
+        for i in range(len(data)):
             signal = simulation_outputs.loc[i, "signal"]
-            #print(signal)
             executed_price = None
     
             # Use first matching order (can be extended to multi-order logic)
             for order in orders:
-                #print(order)
                 executed_price = order.execute(data, i, signal)
-                if executed_price:
-                    #print(executed_price)
-                    pass
                 if executed_price is not None:
                     break  # stop after first matching order
     
             if signal == "enter" and executed_price and position == 0:
-                print("Found entry")
                 position = cash / executed_price
                 cash = 0
+                entry_index = i
+                entry_price = executed_price
                 actions.append("buy")
             elif signal == "exit" and executed_price and position > 0:
                 cash = position * executed_price
                 position = 0
+                pnl = executed_price - entry_price
+                pnl_pct = (pnl / entry_price) * 100 if entry_price else 0
+                strategy.trades.append({
+                    "entry_index": entry_index,
+                    "exit_index": i,
+                    "entry_price": entry_price,
+                    "exit_price": executed_price,
+                    "pnl": pnl,
+                    "pnl_pct": pnl_pct,
+                })
+                entry_index = None
+                entry_price = None
                 actions.append("sell")
             else:
                 actions.append("hold")
@@ -151,34 +133,17 @@ class Backtest(BaseSimulation):
             positions.append(position)
             #print(current_price,portfolio_value)
             
-        #print(portfolio_value)
-    
-        # Store results in DataFrame
-        #self.transformed_data["portfolio_value"] = portfolio_values
-        #self.transformed_data["position"] = positions
-        #self.transformed_data["action"] = actions
-        
-        #print(portfolio_values)
         simulation_outputs["portfolio_value"] = portfolio_values
         simulation_outputs["position"] = positions
         simulation_outputs["action"] = actions
         
         return simulation_outputs
         
-        #print(portfolio_values)
-        
     def execute(self,data,strategy):
         
         initial_investment = self.params["initial_investment"]
-        start = 0
-        end = -1
-        
         simulation_outputs = self.generate_signals(data,strategy)
-        print(simulation_outputs)
         simulation_outputs = self.simulate_returns(simulation_outputs,data,strategy,initial_investment)
-        
-        #return scalar_metrics(self.simulation_outputs)
-        print(simulation_outputs)
         return simulation_outputs
     
 #    def execute(self,input_data_dict,strategy,n_jobs=-1):

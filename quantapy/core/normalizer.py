@@ -1,0 +1,57 @@
+from typing import List, Dict
+from datetime import datetime
+
+from quantapy.core.events import MarketEvent
+
+
+class EventNormalizer:
+
+    @staticmethod
+    def parse_timestamp(value):
+
+        # already datetime
+        if isinstance(value, datetime):
+            return value
+
+        # ISO string
+        if isinstance(value, str):
+            return datetime.fromisoformat(value)
+
+        # fallback
+        raise TypeError(
+            f"Unsupported timestamp type: {type(value)}"
+        )
+
+    @staticmethod
+    def ohlc_json_to_events(
+        raw_data: List[Dict],
+        symbol: str,
+        source: str,
+        dataset: str,
+    ) -> List[MarketEvent]:
+
+        events = []
+
+        for row in raw_data:
+
+            ts = EventNormalizer.parse_timestamp(row["date"])
+
+            events.append(
+                MarketEvent(
+                    symbol=symbol,
+                    timestamp=ts,
+                    event_type="bar",
+                    source=source,
+                    payload={
+                        "open": row["open"],
+                        "high": row["high"],
+                        "low": row["low"],
+                        "close": row["close"],
+                        "volume": row["volume"],
+                    },
+                    version="raw",
+                    dataset=dataset,
+                )
+            )
+
+        return events

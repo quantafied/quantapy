@@ -12,6 +12,14 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: joblib
+Requires-Dist: optuna
+Requires-Dist: TA-Lib
+Requires-Dist: requests
+Requires-Dist: scikit-learn
+Requires-Dist: matplotlib
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier
@@ -20,6 +28,7 @@ Dynamic: description-content-type
 Dynamic: home-page
 Dynamic: license
 Dynamic: license-file
+Dynamic: requires-dist
 Dynamic: requires-python
 Dynamic: summary
 
@@ -44,6 +53,8 @@ Robust strategies must be developed with this uncertainty in mind. A model is on
 QuantaPy aims to provide the tools and infrastructure needed to develop **more useful models** by emphasizing uncertainty-aware evaluation, probabilistic thinking, and scientifically grounded backtesting workflows.
 
 # Features
+
+Testing
 
 * API
   * High-level of abstraction for simple programming

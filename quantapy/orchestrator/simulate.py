@@ -13,18 +13,6 @@ Created on Wed Jun 11 22:09:29 2025
 # multiple transformation components which are extendable
 
 from quantapy.registry.component_registry import COMPONENT_REGISTRY
-from quantapy.utils.loader import load_plugins_from_folder
-from typing import get_args, get_origin, List, Union
-import pandas as pd
-import optuna
-from quantapy.modules.evaluation.metrics import *
-
-#import calculator
-
-from abc import ABC, abstractmethod
-import pandas as pd
-from typing import List,Union,Type
-
 from joblib import Parallel, delayed
 
 class Simulate():
@@ -43,17 +31,19 @@ class Simulate():
     # backtest = Backtest(data,strategy)
     # study = Study(data,strategy,backtest)
     
-    def __init__(self, strategy):
+    def __init__(self, strategy, store=None):
         
         # Information we need from our strategy object
         self.strategy = strategy
+        self.store = store
         self.simulations = [] 
+        self.evaluator = None
         
     def add(self, registered: str, function: str, source: str = "Internal", **kwargs):
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[registered][function][source]
-        data_s_instance = transform_class(strategy=self.strategy,config=config, **kwargs)
+        data_s_instance = transform_class(**kwargs)
     
         self.simulations.append(data_s_instance)
         
@@ -61,7 +51,7 @@ class Simulate():
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[registered][function][source]
-        data_s_instance = transform_class(strategy=self.strategy,config=config, **kwargs)
+        data_s_instance = transform_class(**kwargs)
     
         self.evaluator = data_s_instance
         
@@ -83,6 +73,62 @@ class Simulate():
                     )
                         
         return results
+
+    def execute(self, dataset_name: str, store=None, name: str = None):
+        """
+        Execute registered simulations on a committed DataStore dataset.
+
+        Returns:
+            (simulation_results, evaluator_outputs, metrics)
+        """
+        active_store = store or self.store or self.strategy.store
+        if active_store is None:
+            raise ValueError("Simulate.execute requires a DataStore")
+        if not self.simulations:
+            raise ValueError("No simulations registered")
+
+        df = active_store.to_dataframe(dataset_name)
+        if df is None:
+            raise ValueError(f"Dataset '{dataset_name}' not found")
+
+        parent = active_store.get_record(dataset_name)
+        prefix = name or f"{dataset_name}-{self.simulations[0].__class__.__name__}"
+
+        simulation_results = self.simulations[0].execute(df, self.strategy)
+        active_store.add_child(
+            prefix,
+            simulation_results,
+            parent_ids=[parent.id],
+            kind="backtest",
+            transform={
+                "name": self.simulations[0].__class__.__name__,
+                "params": getattr(self.simulations[0], "params", {}),
+            },
+        )
+
+        evaluator_outputs = None
+        metrics = None
+        if self.evaluator is not None:
+            evaluator_outputs, metrics = self.evaluator.execute(simulation_results)
+            active_store.add_child(
+                f"{prefix}-Portfolio-Outputs",
+                evaluator_outputs,
+                parent_ids=[prefix],
+                kind="metrics",
+                transform={"name": self.evaluator.__class__.__name__, "output": "timeseries"},
+            )
+            active_store.add_child(
+                f"{prefix}-Portfolio-Metrics",
+                metrics,
+                parent_ids=[prefix],
+                kind="metrics",
+                transform={"name": self.evaluator.__class__.__name__, "output": "summary"},
+            )
+
+        self.simulation_results = simulation_results
+        self.evaluation_results = evaluator_outputs
+        self.backtest_metrics = metrics
+        return simulation_results, evaluator_outputs, metrics
         
 #    def execute(self):
 #        

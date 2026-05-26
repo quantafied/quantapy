@@ -32,11 +32,28 @@ class BaseData(ABC):
         merged = {**config_values, **kwargs}
 
         # Build simple parameter dict (defaults overwritten by user input)
-        self.params = {
-            k: merged.get(k, v.get("default"))
-            for k, v in props.items()
-        }
-        
+        #self.params = {
+        #    k: merged.get(k, v.get("default"))
+        #    for k, v in props.items()
+        #}
+
+        self.params = {}
+
+        for k, v in props.items():
+            default = v.get("default")
+
+            if config and "config_values" in config:
+                self.params[k] = config["config_values"].get(k, default)
+            elif config:
+                self.params[k] = config.get(k, default)
+            else:
+                self.params[k] = merged.get(k, default)
+
+        # Include any direct kwargs or merged config values not declared in the schema
+        for k, v in merged.items():
+            if k not in self.params:
+                self.params[k] = v
+
         # Add variable selection options
         self.params["variable_options"] = variable_options
         
