@@ -29,6 +29,11 @@ json_schema_exra:
 
 @register_component(category="Best Trial", function="Distance from Ideal", source="Internal")
 class weighted_euclidean_distance_to_ideal():
+    """Select a Pareto solution by weighted distance from the ideal point."""
+
+    def __init__(self, weights: list[float] = None, **kwargs):
+        """Initialize selector weights."""
+        self.weights = weights
     
     def execute(self, 
                 pareto_solutions: np.array, 
@@ -46,6 +51,7 @@ class weighted_euclidean_distance_to_ideal():
         - distances (np.array): Weighted Euclidean distances for each solution.
         """
         pareto_solutions = np.array(pareto_solutions)
+        weights = self.weights or weights
         weights = np.array(weights) / np.sum(weights)  # Normalize weights to sum to 1
     
         if len(pareto_solutions) > 1:
@@ -54,10 +60,13 @@ class weighted_euclidean_distance_to_ideal():
             
             for j, obj_type in enumerate(objectives):
                 col = pareto_solutions[:, j]
-                if obj_type == 'maximize':
-                    norm_solutions[:, j] = (col - np.min(col)) / (np.max(col) - np.min(col))
+                value_range = np.max(col) - np.min(col)
+                if value_range == 0:
+                    norm_solutions[:, j] = 1.0
+                elif obj_type == 'maximize':
+                    norm_solutions[:, j] = (col - np.min(col)) / value_range
                 elif obj_type == 'minimize':
-                    norm_solutions[:, j] = (np.max(col) - col) / (np.max(col) - np.min(col))
+                    norm_solutions[:, j] = (np.max(col) - col) / value_range
                 else:
                     raise ValueError(f"Invalid objective type: {obj_type}. Use 'max' or 'min'.")
         

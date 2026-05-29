@@ -12,6 +12,7 @@ from joblib import Parallel, delayed
 
 @register_component(category="Market", function="OHLC", source="Internal")
 class OHLC(BaseData):
+    """Legacy internal FMP OHLC data provider."""
     
     config = {
         "title": "OHLC",
@@ -62,6 +63,7 @@ class OHLC(BaseData):
     }
 
     def __init__(self, *args, **kwargs):
+        """Initialize legacy provider parameters and defaults."""
         super().__init__(*args, **kwargs)
         self.api_key = "your_api_key_here"
         self.synthesizable = True # if true data synthesizer acts on these values
@@ -75,6 +77,7 @@ class OHLC(BaseData):
     
     @staticmethod
     def get_jsonparsed_data(url):
+        """Fetch JSON data from a URL and return parsed content."""
         response = requests.get(url)
         if response.status_code == 200:
             return response.json()
@@ -84,6 +87,7 @@ class OHLC(BaseData):
         
     #def fetch_historical_data(self,ticker,period=None,interval=None,start=None,end=None):
     def fetch_historical_data(self, ticker, interval, period, start=None, end=None) -> pd.DataFrame:
+        """Fetch historical OHLC data for one ticker and date range."""
         
         df = None
         
@@ -204,6 +208,7 @@ class OHLC(BaseData):
                 df = pd.DataFrame(data)
                 print(df)
                 df = df.sort_values(by='date')
+                df = df.reset_index(drop=True)
                 #print(df)
                 
         #self.data = df
@@ -222,6 +227,7 @@ class OHLC(BaseData):
         )]
 
     def execute(self, n_jobs=-1):
+        """Fetch configured tickers in parallel."""
         results = Parallel(
             n_jobs=n_jobs,
             backend="threading",
@@ -236,6 +242,4 @@ class OHLC(BaseData):
         
 
     
-
-
 

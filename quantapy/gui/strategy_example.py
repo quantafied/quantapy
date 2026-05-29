@@ -16,6 +16,7 @@ from quantapy.orchestrator.data import Data
 from quantapy.orchestrator.calculator import Calculator
 from quantapy.orchestrator.strategy import Strategy
 from quantapy.orchestrator.simulate import Simulate
+from quantapy.orchestrator.study import Study
 from quantapy.core.timeseries import DataStore, TimeSeries
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,7 +31,7 @@ load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/mo
 load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/study")
 
 data = Data()
-data.add_provider("Market", "OHLC", "FMP", source_ids=["AAPL"], interval="1hour")
+data.add_provider("Market", "OHLC", "FMP", source_ids=["AAPL"], interval="1hour", period="3mo")
 store = DataStore()
 fetched_data = data.fetch()
 
@@ -39,6 +40,7 @@ for dataset_name, dataset in fetched_data.items():
         dataset_name,
         dataset,
         source={"provider": "OHLC"},
+        attrs={"symbol": dataset_name.replace("OHLC_", ""), "artifact": "source"},
     )
 
 aapl_data = store.get("OHLC_AAPL")
@@ -50,10 +52,10 @@ calc.add_transform(
     category="Technical",
     function="Moving Average",
     source="Internal",
-    name="SMA_20",
+    name="Leading",
     timeperiod=20,
     real="close",
-    output_names={"output": "sma_20"},
+    output_names={"output": "Leading"},
     display="Overlay"
 )
 
@@ -62,10 +64,10 @@ calc.add_transform(
     category="Technical",
     function="Moving Average",
     source="Internal",
-    name="SMA_50",
+    name="Lagging",
     timeperiod=50,
     real="close",
-    output_names={"output": "sma_50"},
+    output_names={"output": "Lagging"},
     display="Overlay"
 )
 
@@ -75,6 +77,7 @@ store.add_child(
     all_indicators,
     parent_ids=["OHLC_AAPL"],
     kind="derived",
+    attrs={"symbol": "AAPL", "artifact": "indicators", "indicator_set": "AllIndicators"},
     transform={"name": "AllIndicators", "transforms": calc.list_transforms()},
 )
 
@@ -95,6 +98,7 @@ for synth_name, synth_data in synthetic_outputs.items():
         synth_data,
         parent_ids=["OHLC_AAPL"],
         kind="synthetic",
+        attrs={"symbol": "AAPL", "artifact": "source", "synthetic": True},
         transform={"name": "GaussianNoise"},
     )
 
@@ -106,6 +110,12 @@ for record in store.synthetic():
         noisy_indicators,
         parent_ids=[record.id],
         kind="derived",
+        attrs={
+            "symbol": "AAPL",
+            "artifact": "indicators",
+            "indicator_set": "AllIndicators",
+            "synthetic": True,
+        },
         transform={"name": "AllIndicators", "transforms": calc.list_transforms()},
     )
 
@@ -130,8 +140,8 @@ strategy = Strategy(calc, store=store)
 strategy.add(
     "Signal", 
     "Crossover",
-    value1="sma_20",
-    value2="sma_50",
+    value1="Leading",
+    value2="Lagging",
     action="enter",
     direction="long"
 )
@@ -140,8 +150,8 @@ strategy.add(
 strategy.add(
     "Signal",
     "Crossunder",
-    value1="sma_20",
-    value2="sma_50",
+    value1="Leading",
+    value2="Lagging",
     action="exit",
     direction="long"
 )
@@ -165,14 +175,124 @@ strategy.add(
 simulation = Simulate(strategy=strategy, store=store)
 simulation.add("Simulation", "Backtest", "Internal", initial_investment=10000)
 simulation.add_evaluator("Evaluate", "Portfolio", "Internal")
-simulation_results, portfolio_outputs, portfolio_metrics = simulation.execute(
-    dataset_name="OHLC_AAPL-AllIndicators",
-    name="OHLC_AAPL-SMA-Crossover-Backtest",
+
+# ============================================================================
+# Optimization Parameter Selection
+# ============================================================================
+print("\nOPTIMIZATION PARAMETER SETUP")
+print("=" * 80)
+
+study = Study(
+    simulation=simulation,
+    store=store,
+    calculator=calc,
+    strategy=strategy,
 )
+
+print("Discoverable optimization candidates:")
+for candidate in study.discover_parameters():
+    outputs = candidate.get("outputs")
+    used_by_strategy = candidate.get("used_by_strategy")
+    dependency_note = (
+        f" outputs={outputs} used_by_strategy={used_by_strategy}"
+        if outputs is not None
+        else ""
+    )
+    print(
+        f"- {candidate['target']} "
+        f"{candidate['name'] if candidate['name'] is not None else candidate['index']}."
+        f"{candidate['param']} default={candidate['default']} "
+        f"bounds=({candidate['low']}, {candidate['high']}) "
+        f"choices={candidate['choices']}"
+        f"{dependency_note}"
+    )
+
+# Indicator parameters target transform names, not output columns.
+# Discovery maps strategy-used outputs back to their parent transforms.
+study.add_parameter(
+    target="Transform",
+    name="Leading",
+    param="timeperiod",
+    dtype="integer",
+    low=5,
+    high=40,
+)
+study.add_parameter(
+    target="Transform",
+    name="Lagging",
+    param="timeperiod",
+    dtype="integer",
+    low=20,
+    high=120,
+)
+
+# Strategy parameters: explicitly selected from the strategy definition.
+#study.add_parameter(
+#    target="Signal",
+#    index=0,
+#    param="value1",
+#    dtype="categorical",
+#    choices=["sma_20", "sma_50", "close"],
+#)
+#study.add_parameter(
+#    target="Signal",
+#    index=0,
+#    param="value2",
+#    dtype="categorical",
+#    choices=["sma_20", "sma_50", "close"],
+#)
+#study.add_parameter(
+#    target="Order",
+#    index=0,
+#    param="on_bar",
+#    dtype="categorical",
+#    choices=["current", "next"],
+#)
+
+print("\nEnabled optimization parameters:")
+for parameter in study.list_parameters():
+    print(f"- {parameter}")
+
+study.add("Validation", "Holdout", "Internal", train_ratio=0.75)
+study.add("Best Trial", "Distance from Ideal", "Internal", weights=[0.75, 0.25])
+
+optimizer = study.add(
+    "Optimization",
+    "Bayesian",
+    "Internal",
+    trials=100,
+    objectives=["Maximize Profit", "Maximize Sharpe Ratio"],
+    storage="sqlite:///asimin.sqlite3",
+)
+
+validation_results = optimizer.execute_validated(
+    study=study,
+    source_dataset="OHLC_AAPL",
+    derived_name="OHLC_AAPL-AllIndicators",
+)
+optimization_results = validation_results[-1]
+run_id = optimization_results["run_id"]
+simulation_results = optimization_results["test"]["simulation_results"]
+portfolio_outputs = optimization_results["test"]["evaluator_outputs"]
+portfolio_metrics = optimization_results["test"]["metrics"]
+
+print("\nSELECTED OPTUNA TRIAL")
+print("=" * 80)
+print(f"Values: {optimization_results['best_trial'].values}")
+print(f"Params: {optimization_results['best_trial'].params}")
+
+print("\nOPTUNA TRIALS")
+print("=" * 80)
+print(optimization_results["trials"].tail().to_string(index=False))
 
 print("\nPORTFOLIO METRICS")
 print("=" * 80)
+print("Train:")
+print(optimization_results["train"]["metrics"].to_string(index=False))
+print("\nHeld out:")
 print(portfolio_metrics.to_string(index=False))
+final_profit = float(portfolio_metrics["Profit"].iloc[0])
+print(f"\nHeld-out optimized backtest profit: ${final_profit:.2f}")
 
 print("\nDATASTORE CONTENTS AFTER BACKTEST")
 print("=" * 80)
@@ -190,7 +310,10 @@ if hasattr(strategy, 'trades') and strategy.trades:
         print(f"\n     Trade {i+1}:")
         print(f"       Entry:  index {trade['entry_index']}, price ${trade['entry_price']:.2f}")
         print(f"       Exit:   index {trade['exit_index']}, price ${trade['exit_price']:.2f}")
+        print(f"       Shares: {trade.get('shares', 0):.4f}")
         print(f"       P&L:    ${trade['pnl']:.2f} ({trade['pnl_pct']:.2f}%)")
+        if trade.get("closed_on_completion"):
+            print("       Note:   closed on final bar")
 else:
     print("  ✗ No completed trades")
 
@@ -199,78 +322,70 @@ else:
 # ============================================================================
 print("\n[7] Visualizing strategy execution...")
 
-df = store.to_dataframe("OHLC_AAPL-AllIndicators")
+fig, axes = plt.subplots(
+    len(validation_results),
+    2,
+    figsize=(18, 6 * len(validation_results)),
+    squeeze=False,
+)
 
-if not df.empty and len(df) > 20:
-    fig, ax = plt.subplots(figsize=(14, 8))
-    
-    # Plot price and moving averages
-    ax.plot(range(len(df)), df['close'], 'b-', label='Close Price', linewidth=2)
-    ax.plot(range(len(df)), df['sma_20'], 'r--', label='SMA(20)', linewidth=1.5, alpha=0.7)
-    ax.plot(range(len(df)), df['sma_50'], 'g--', label='SMA(50)', linewidth=1.5, alpha=0.7)
-    
-    # Mark entry and exit signals
-    for sig in strategy.event_signals:
-        if sig['action'] == 'enter':
-            ax.scatter(sig['index'], sig['price'], color='green', marker='^', s=100, label='Entry' if sig == strategy.event_signals[0] else '')
-        elif sig['action'] == 'exit':
-            ax.scatter(sig['index'], sig['price'], color='red', marker='v', s=100, label='Exit' if sig == strategy.event_signals[0] else '')
-    
-    ax.set_title('AAPL - SMA Crossover Strategy Execution', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Price ($)', fontsize=12)
-    ax.set_xlabel('Time Index', fontsize=12)
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3)
-    
+for row, fold_result in zip(axes, validation_results):
+    fold = fold_result["fold"]
+    plot_specs = [
+        ("Train", "train", fold_result["train"], row[0]),
+        ("Held Out", "test", fold_result["test"], row[1]),
+    ]
+
+    for label, split, result, ax in plot_specs:
+        indicator_record = store.find_one(
+            kind="derived",
+            run_id=run_id,
+            fold=fold,
+            split=split,
+            artifact="indicators",
+        )
+        fold_df = store.to_dataframe(indicator_record)
+        if "date" in fold_df.columns:
+            fold_df = fold_df.sort_values("date").reset_index(drop=True)
+        fold_simulation = result["simulation_results"]
+
+        ax.plot(range(len(fold_df)), fold_df["close"], "b-", label="Close Price", linewidth=2)
+        ax.plot(range(len(fold_df)), fold_df["Leading"], "r--", label="Leading", linewidth=1.5, alpha=0.7)
+        ax.plot(range(len(fold_df)), fold_df["Lagging"], "g--", label="Lagging", linewidth=1.5, alpha=0.7)
+
+        buy_points = fold_simulation[fold_simulation["action"] == "buy"]
+        sell_points = fold_simulation[fold_simulation["action"] == "sell"]
+        if not buy_points.empty:
+            ax.scatter(
+                buy_points.index,
+                fold_df.loc[buy_points.index, "close"],
+                color="green",
+                marker="^",
+                s=100,
+                label="Buy",
+            )
+        if not sell_points.empty:
+            ax.scatter(
+                sell_points.index,
+                fold_df.loc[sell_points.index, "close"],
+                color="red",
+                marker="v",
+                s=100,
+                label="Sell",
+            )
+
+        ax.set_title(f"AAPL - {label} Fold {fold}", fontsize=14, fontweight="bold")
+        ax.set_ylabel("Price ($)", fontsize=12)
+        ax.set_xlabel("Fold Time Index", fontsize=12)
+        ax.legend(loc="best")
+        ax.grid(True, alpha=0.3)
+
+if validation_results:
     plt.tight_layout()
     plt.show()
 
-# ============================================================================
-# Summary
-# ============================================================================
-print("\n" + "=" * 80)
-print("STRATEGY INTEGRATION SUMMARY")
-print("=" * 80)
+print(store.list())
 
-print(f"""
-✓ Updated Strategy class works with new architecture:
-
-  1. CALCULATOR v2 INTEGRATION
-     • Uses Calculator.add_transform() to register indicators
-     • Uses Calculator.derive_combined() to compute all at once
-     • No direct access to calculator.transforms (abstracted)
-
-  2. DATASTORE INTEGRATION
-     • Strategy accepts store parameter in __init__
-     • Uses store.to_dataframe() to get data for signal processing
-     • Datasets accessed by name: "OHLC_AAPL-AllIndicators"
-
-  3. SIGNAL & ORDER LOGIC UNCHANGED
-     • Strategy.add() still registers signals/orders
-     • Signal.check() detects entry/exit conditions
-     • Order.execute() fills orders at specified prices
-
-  4. WORKFLOW
-     • Register indicators → Calculate with derive_combined()
-     • Generate GaussianNoise datasets from raw OHLC data
-     • Apply the same indicators to each noisy child dataset
-     • Inspect raw/synthetic/derived datasets with DataStore records
-     • Create Strategy(calc, store=store)
-     • Add Signal/Order objects
-     • Call strategy.generate_signals()
-     • Call strategy.simulate_returns()
-     • Inspect strategy.event_signals and strategy.trades
-
-✓ Key Changes for Backward Compatibility:
-     • Old: calculator.transformed_data dict access → New: store.to_dataframe()
-     • Old: calculator.transforms dict access → New: calculator.list_transforms()
-     • Old: Strategy(calc) → New: Strategy(calc, store=store)
-
-✓ Next Steps:
-     1. Extend signals (RSI overbought/oversold, Bollinger Band breaks)
-     2. Optimize parameters with strategy.optimize()
-     3. Backtest each synthetic AllIndicators dataset
-     4. Compare raw vs augmented performance
-""")
-
-print("\n✅ Strategy integration complete!")
+print("\nStructured study artifacts:")
+for record in store.find(run_id=run_id):
+    print(f"{record.kind:9} | {record.attrs} | {record.name}")

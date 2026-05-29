@@ -10,6 +10,7 @@ class Dataset:
     """
 
     def __init__(self, name: str, data: Union[np.ndarray, pd.DataFrame]):
+        """Create a dataset from a NumPy array or DataFrame."""
         self.name = name
         if isinstance(data, np.ndarray):
             self.data = pd.DataFrame(data)
@@ -33,6 +34,7 @@ class DataStore:
     """
 
     def __init__(self):
+        """Initialize an empty dataset registry."""
         self._datasets: Dict[str, Dataset] = {}
 
     def add(self, name: str, data: Union[np.ndarray, pd.DataFrame, Dataset]):

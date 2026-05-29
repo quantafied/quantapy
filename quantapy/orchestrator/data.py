@@ -43,6 +43,7 @@ class Data:
     """
 
     def __init__(self):
+        """Initialize provider and transformer registries."""
         self.providers = []
         self.transformers = []
 

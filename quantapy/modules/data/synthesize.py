@@ -31,6 +31,7 @@ class GaussianNoise(BaseTransformer):
     """
     
     def __init__(self, **kwargs):
+        """Initialize Gaussian noise parameters with defaults."""
         defaults = {
             "n_trajectories": 5,
             "mean": 0.0,
@@ -109,6 +110,7 @@ class TradePermutation(BaseTransformer):
     """
     
     def __init__(self, **kwargs):
+        """Initialize trade permutation parameters with defaults."""
         defaults = {"n_trajectories": 50}
         defaults.update(kwargs)
         super().__init__(**defaults)

@@ -23,6 +23,7 @@ import json
 #import calculator
         
 class Strategy():
+    """Build, run, and inspect signal/order based trading strategies."""
     
     def __init__(self, calculator, store=None):
         """
@@ -215,10 +216,16 @@ class Strategy():
         # Get all transforms registered with Calculator v2
         transforms = self.calculator.list_transforms()
         
-        # All transforms are optimizable if they depend on strategy signals
+        # Strategy signals reference output columns (e.g. "sma_20"), while
+        # optimization mutates transform components (e.g. "SMA_20").
         for name, transform_info in transforms.items():
-            # Check if transform outputs are used by strategy
-            if any(name in self.transform_dependencies for name in self.transform_dependencies):
+            output_names = (
+                transform_info
+                .get("params", {})
+                .get("output_names", {})
+                .values()
+            )
+            if any(output in self.transform_dependencies for output in output_names):
                 self.optimizable_functions.append(name)
         
         # If no specific dependencies, all are optimizable

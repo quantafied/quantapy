@@ -17,15 +17,17 @@ from quantapy.modules.evaluation.portfolio import PortfolioAnalytics
 
 @register_component(category="Evaluate", function="Portfolio", source="Internal")
 class Portfolio(BaseSimulation):
+    """Registry adapter for portfolio analytics evaluation."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the portfolio evaluator."""
         super().__init__(*args, **kwargs)
 
     def execute(self, metrics_df):
+        """Compute portfolio analytics outputs and summary metrics."""
 
         analyzer = PortfolioAnalytics(metrics_df)
 
         outputs, metrics = analyzer.compute()
 
         return outputs, metrics
-

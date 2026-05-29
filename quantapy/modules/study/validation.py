@@ -38,6 +38,7 @@ class none(BaseStudy):
     
     def execute(self,
                 df: pd.DataFrame):
+        """Return a single split covering the full dataset."""
         
         splits = [([0,-1],[0,-1])]
         
@@ -62,11 +63,12 @@ class holdout(BaseStudy):
     def execute(self,
                 df: pd.DataFrame,
                 train_ratio: float = 0.75):
+        """Return one train/test holdout split."""
             
         test_size = math.ceil(len(df)*(1.0-self.params["train_ratio"]))
         train_size = len(df) - test_size
         
-        splits = [([0,train_size],[train_size+1,train_size+test_size-1])]
+        splits = [([0, train_size - 1], [train_size, train_size + test_size - 1])]
         
         return splits
     
@@ -119,6 +121,7 @@ class time_series_k_fold(BaseStudy):
                 max_train_size: int = 1, 
                 test_size: int = 1, 
                 gap: int = 0):
+        """Return time-series cross-validation fold index ranges."""
     
         tscv = TimeSeriesSplit(n_splits=self.params["n_splits"], max_train_size=self.params["max_train_size"], test_size=self.params["test_size"], gap=self.params["gap"])
         #splits = [(df.iloc[train_idx], df.iloc[test_idx]) for train_idx, test_idx in tscv.split(df)]

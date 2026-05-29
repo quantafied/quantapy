@@ -58,3 +58,35 @@ Testing
 # Status
 
 This library is under active development and does not contain a stable release yet
+
+## Current Architecture
+
+The current package uses a registry-driven workflow:
+
+- `Data` creates provider and transformer instances from the registry.
+- `Calculator` manages registered transforms and derives indicator datasets.
+- `Strategy` manages signal and order components.
+- `Simulate` runs registered simulation and evaluation components.
+- `DataStore` stores committed datasets and parent/child lineage.
+
+The preferred workflow is explicit compute-then-commit. Components return
+outputs first; only the `DataStore` commits data:
+
+```python
+store = DataStore()
+
+for name, dataset in data.fetch().items():
+    store.add_raw(name, dataset, source={"provider": "OHLC"})
+
+indicators = calc.derive_combined(store, "OHLC_AAPL")
+store.add_child(
+    "OHLC_AAPL-AllIndicators",
+    indicators,
+    parent_ids=["OHLC_AAPL"],
+    kind="derived",
+)
+```
+
+This keeps scripting and GUI workflows consistent: users can preview fetched,
+synthetic, derived, strategy, and simulation outputs before committing them to
+the lineage-aware store.

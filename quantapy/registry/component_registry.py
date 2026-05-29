@@ -3,7 +3,9 @@ from quantapy.registry.constants import VALID_COMPONENT_CATEGORIES
 COMPONENT_REGISTRY = {}
 
 def register_component(category: str, function: str, source: str = None, **metadata):
+    """Register a component class under category/function/source keys."""
     def decorator(cls):
+        """Add a class to the global component registry."""
         cat = category
         func = function
         src = (source or "default")

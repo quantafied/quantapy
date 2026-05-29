@@ -85,16 +85,19 @@ def to_returns(equity: pd.Series) -> pd.Series:
 # ============================================================
 
 def cumulative_returns(returns: pd.Series) -> pd.Series:
+    """Convert periodic returns into a cumulative return curve."""
     return (1 + returns).cumprod()
 
 
 def drawdown_series(returns: pd.Series) -> pd.Series:
+    """Compute drawdown from the cumulative return high-water mark."""
     cumulative = cumulative_returns(returns)
     peaks = cumulative.cummax()
     return (cumulative - peaks) / peaks
 
 
 def max_drawdown(returns: pd.Series) -> float:
+    """Return the worst drawdown in a return series."""
     return drawdown_series(returns).min()
 
 
@@ -102,6 +105,7 @@ def annual_return(
     returns: pd.Series,
     periods_per_year: int = 252
 ) -> float:
+    """Annualize total return over the observed number of periods."""
 
     cumulative = cumulative_returns(returns)
 
@@ -121,6 +125,7 @@ def annual_volatility(
     returns: pd.Series,
     periods_per_year: int = 252
 ) -> float:
+    """Annualize the standard deviation of periodic returns."""
 
     return returns.std(ddof=1) * np.sqrt(periods_per_year)
 
@@ -130,6 +135,7 @@ def sharpe_ratio(
     risk_free_rate: float = 0.0,
     periods_per_year: int = 252
 ) -> float:
+    """Compute annualized Sharpe ratio using a constant risk-free rate."""
 
     excess = returns - (risk_free_rate / periods_per_year)
 
@@ -148,6 +154,7 @@ def downside_risk(
     required_return: float = 0.0,
     periods_per_year: int = 252
 ) -> float:
+    """Compute annualized downside deviation below a required return."""
 
     downside = np.minimum(
         returns - required_return,
@@ -164,6 +171,7 @@ def sortino_ratio(
     required_return: float = 0.0,
     periods_per_year: int = 252
 ) -> float:
+    """Compute annualized Sortino ratio using downside risk."""
 
     drisk = downside_risk(
         returns,
@@ -187,6 +195,7 @@ def calmar_ratio(
     returns: pd.Series,
     periods_per_year: int = 252
 ) -> float:
+    """Compute annual return divided by absolute max drawdown."""
 
     mdd = abs(max_drawdown(returns))
 
@@ -203,6 +212,7 @@ def omega_ratio(
     returns: pd.Series,
     threshold: float = 0.0
 ) -> float:
+    """Compute gains over losses relative to a threshold."""
 
     gains = returns[returns > threshold] - threshold
     losses = threshold - returns[returns < threshold]
@@ -251,6 +261,7 @@ def value_at_risk(
     returns: pd.Series,
     cutoff: float = 0.05
 ) -> float:
+    """Return historical value at risk at the requested cutoff."""
 
     return np.percentile(returns, cutoff * 100)
 
@@ -264,6 +275,7 @@ def rolling_volatility(
     window: int = 10,
     periods_per_year: int = 252
 ) -> pd.Series:
+    """Compute rolling annualized volatility."""
 
     return (
         returns.rolling(window)
@@ -277,6 +289,7 @@ def rolling_sharpe(
     window: int = 10,
     periods_per_year: int = 252
 ) -> pd.Series:
+    """Compute rolling annualized Sharpe ratio."""
 
     mean = returns.rolling(window).mean()
     std = returns.rolling(window).std(ddof=1)
@@ -291,12 +304,14 @@ def rolling_sharpe(
 # ============================================================
 
 class PortfolioAnalytics:
+    """Compute portfolio performance time series and summary metrics."""
 
     def __init__(
         self,
         metrics_df: pd.DataFrame,
         risk_free_rate: float = 0.0
     ):
+        """Initialize analytics from a date/portfolio_value DataFrame."""
 
         self.metrics_df = metrics_df.copy()
 
@@ -323,6 +338,7 @@ class PortfolioAnalytics:
     # --------------------------------------------------------
 
     def compute(self):
+        """Return rolling analytics outputs and one-row summary metrics."""
 
         returns = self.returns
         ppy = self.periods_per_year

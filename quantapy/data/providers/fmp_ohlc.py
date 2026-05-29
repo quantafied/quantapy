@@ -23,6 +23,7 @@ class OHLC(BaseProvider):
     """
 
     def __init__(self, **kwargs):
+        """Initialize FMP provider parameters and defaults."""
         super().__init__(**kwargs)
         self.api_key = "sNfN2hHaQDfQj5lsxdS93VLuAGXk8JRA"
         
@@ -47,13 +48,19 @@ class OHLC(BaseProvider):
         try:
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
-                return r.json()
+                return self._sort_chronological(r.json())
             else:
                 print(f"Warning: FMP returned {r.status_code} for {symbol}")
                 return []
         except Exception as e:
             print(f"Error fetching {symbol}: {e}")
             return []
+
+    def _sort_chronological(self, rows: List[Dict]) -> List[Dict]:
+        """Return FMP rows ordered oldest to newest when a date column exists."""
+        if not rows or not all(isinstance(row, dict) and "date" in row for row in rows):
+            return rows
+        return sorted(rows, key=lambda row: row["date"])
 
     def execute(self) -> Dict[str, List[Dict]]:
         """

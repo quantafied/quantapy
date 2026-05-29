@@ -1,11 +1,38 @@
-The main structure of the codebase is as follows:
+# QuantaPy Package Notes
 
-handler             -> orchestrator
-    base            -> core
-        subclass A  -> modules
-        subclass B  -> modules
+QuantaPy is organized around small orchestrators and registered plugin
+components:
 
-instance = orchestrator()
-instance.method("registry_category","registry_function",**kwargs)
+```text
+orchestrator -> coordinates workflow
+core         -> shared containers and base classes
+modules      -> registered providers, transforms, signals, orders, simulations
+registry     -> component registration
+```
 
+The current workflow is explicit compute-then-commit:
+
+```python
+data = Data()
+data.add_provider("Market", "OHLC", "FMP", source_ids=["AAPL"], interval="1hour")
+
+store = DataStore()
+for name, dataset in data.fetch().items():
+    store.add_raw(name, dataset, source={"provider": "OHLC"})
+
+calc = Calculator()
+calc.add_transform("Technical", "Moving Average", name="SMA_20", timeperiod=20)
+
+indicators = calc.derive_combined(store, "OHLC_AAPL")
+store.add_child(
+    "OHLC_AAPL-AllIndicators",
+    indicators,
+    parent_ids=["OHLC_AAPL"],
+    kind="derived",
+)
+```
+
+Only `DataStore.add_raw()` and `DataStore.add_child()` commit data to the store.
+Providers, transformers, calculators, strategies, and simulations return outputs
+first so scripts and GUIs can preview results before committing them.
 

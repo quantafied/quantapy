@@ -15,6 +15,7 @@ from quantapy.registry.component_registry import COMPONENT_REGISTRY
 from quantapy.utils.loader import load_plugins_from_folder
 from quantapy.orchestrator.data import Data
 from quantapy.orchestrator.calculator import Calculator
+from quantapy.orchestrator.study import Study
 from quantapy.core.timeseries import DataStore, TimeSeries
 import matplotlib.pyplot as plt
 import numpy as np
@@ -87,6 +88,42 @@ calc.add_transform(
 print("  ✓ Registered RSI_14")
 
 print(f"  ✓ Total registered: {len(calc.list_transforms())} transforms")
+
+# ============================================================================
+# Part 2b: Select Indicator Parameters for Optimization
+# ============================================================================
+print("\n[2b] Selecting indicator parameters for optimization...")
+
+study = Study(simulation=None, store=store, calculator=calc)
+candidate_params = study.discover_parameters()
+
+print("  Discoverable optimization candidates:")
+for candidate in candidate_params:
+    print(
+        f"  - {candidate['target']} {candidate['name']}.{candidate['param']} "
+        f"default={candidate['default']} bounds=({candidate['low']}, {candidate['high']})"
+    )
+
+study.add_parameter(
+    target="Transform",
+    name="SMA_20",
+    param="timeperiod",
+    dtype="integer",
+    low=5,
+    high=50,
+)
+study.add_parameter(
+    target="Transform",
+    name="RSI_14",
+    param="timeperiod",
+    dtype="integer",
+    low=7,
+    high=30,
+)
+
+print("  Enabled optimization parameters:")
+for parameter in study.list_parameters():
+    print(f"  - {parameter}")
 
 # ============================================================================
 # Part 3: BEST PRACTICE - ALL Indicators in ONE Dataset

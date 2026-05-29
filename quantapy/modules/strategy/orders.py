@@ -16,7 +16,7 @@ import random
     
 @register_component(category="Order", function="Market", source="Internal")
 class market(BaseOrder):
-    """Class to compute bollinger bands indicator"""
+    """Market order that fills from a configured price column and bar offset."""
     
     config = {
       "title": "Market Order",
@@ -56,6 +56,10 @@ class market(BaseOrder):
         on_signal = self.params["on_signal"]
         on_price = self.params["on_price"]
         on_bar = self.params["on_bar"]
+        expected_signal = "enter" if on_signal == "entry" else on_signal
+
+        if signal != expected_signal:
+            return None
 
         # Determine bar offset
         if on_bar == "previous":

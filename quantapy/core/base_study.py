@@ -41,6 +41,7 @@ class BaseStudy(ABC):
 
         # Build simple parameter dict (defaults overwritten by user input)
         def deep_defaults(schema_node):
+            """Build nested default values from a JSON-schema-like node."""
             if "default" in schema_node:
                 return schema_node["default"]
             if schema_node.get("type") == "object":
@@ -48,6 +49,7 @@ class BaseStudy(ABC):
             return None
         
         def deep_merge(defaults, incoming):
+            """Merge incoming nested values into defaults."""
             if not isinstance(defaults, dict) or not isinstance(incoming, dict):
                 return incoming if incoming is not None else defaults
             out = defaults.copy()
@@ -64,6 +66,7 @@ class BaseStudy(ABC):
         self.simulation = simulation
         
     def get_optimizable(self):
+        """Return calculator transforms that are referenced by strategy conditions."""
         
         # Optimizable from transforms
         

@@ -16,6 +16,7 @@ from quantapy.registry.component_registry import COMPONENT_REGISTRY
 from joblib import Parallel, delayed
 
 class Simulate():
+    """Coordinate registered simulation and evaluation components."""
     
     # Strategy remains the same so we dont need to wory about mutating data
     # The issue with parallelizing backtest is that we need to mutate data object to update transforms
@@ -32,6 +33,7 @@ class Simulate():
     # study = Study(data,strategy,backtest)
     
     def __init__(self, strategy, store=None):
+        """Create a simulation orchestrator for a strategy and optional store."""
         
         # Information we need from our strategy object
         self.strategy = strategy
@@ -40,6 +42,7 @@ class Simulate():
         self.evaluator = None
         
     def add(self, registered: str, function: str, source: str = "Internal", **kwargs):
+        """Instantiate and register a simulation component from the registry."""
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[registered][function][source]
@@ -48,6 +51,7 @@ class Simulate():
         self.simulations.append(data_s_instance)
         
     def add_evaluator(self, registered: str, function: str, source: str = "Internal", **kwargs):
+        """Instantiate and register an evaluation component from the registry."""
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[registered][function][source]
@@ -61,6 +65,7 @@ class Simulate():
             return simulation_results
             
     def backtest(self,input_data_dict,strategy,n_jobs=-1):
+        """Run registered simulations over a collection of input datasets."""
         
         for simulation in self.simulations:
         
@@ -74,7 +79,7 @@ class Simulate():
                         
         return results
 
-    def execute(self, dataset_name: str, store=None, name: str = None):
+    def execute(self, dataset_name: str, store=None, name: str = None, attrs: dict = None):
         """
         Execute registered simulations on a committed DataStore dataset.
 
@@ -100,6 +105,7 @@ class Simulate():
             simulation_results,
             parent_ids=[parent.id],
             kind="backtest",
+            attrs={**(attrs or {}), "artifact": "backtest"},
             transform={
                 "name": self.simulations[0].__class__.__name__,
                 "params": getattr(self.simulations[0], "params", {}),
@@ -115,6 +121,7 @@ class Simulate():
                 evaluator_outputs,
                 parent_ids=[prefix],
                 kind="metrics",
+                attrs={**(attrs or {}), "artifact": "portfolio_outputs"},
                 transform={"name": self.evaluator.__class__.__name__, "output": "timeseries"},
             )
             active_store.add_child(
@@ -122,6 +129,7 @@ class Simulate():
                 metrics,
                 parent_ids=[prefix],
                 kind="metrics",
+                attrs={**(attrs or {}), "artifact": "portfolio_metrics"},
                 transform={"name": self.evaluator.__class__.__name__, "output": "summary"},
             )
 

@@ -186,6 +186,7 @@ class DatasetRecord:
     transform: Optional[Dict[str, Any]] = None
     source: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    attrs: Dict[str, Any] = field(default_factory=dict)
     stale: bool = False
 
 
@@ -200,6 +201,7 @@ class DataStore:
     """
     
     def __init__(self):
+        """Initialize an empty lineage-aware dataset store."""
         self._records: Dict[str, DatasetRecord] = {}
         self._name_to_id: Dict[str, str] = {}
 
@@ -240,6 +242,7 @@ class DataStore:
         transform: Optional[Dict[str, Any]] = None,
         source: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
+        attrs: Optional[Dict[str, Any]] = None,
         stale: bool = False,
         dataset_id: Optional[str] = None,
     ) -> str:
@@ -265,6 +268,8 @@ class DataStore:
                 source = old_record.source
             if tags is None:
                 tags = old_record.tags
+            if attrs is None:
+                attrs = old_record.attrs
         resolved_parent_ids = [
             self._resolve_id(parent) or parent
             for parent in (parent_ids or [])
@@ -282,6 +287,7 @@ class DataStore:
             transform=transform,
             source=source or {},
             tags=tags or [],
+            attrs=attrs or {},
             stale=stale,
         )
         self._name_to_id[name] = record_id
@@ -314,13 +320,15 @@ class DataStore:
 
     def get_record(self, id_or_name: str) -> Optional[DatasetRecord]:
         """Get a dataset record by id or name."""
+        if isinstance(id_or_name, DatasetRecord):
+            return id_or_name
         record_id = self._resolve_id(id_or_name)
         return self._records.get(record_id) if record_id else None
     
     def to_dataframe(self, name: str) -> Optional[pd.DataFrame]:
         """Get TimeSeries as DataFrame."""
-        ts = self.get(name)
-        return ts.to_dataframe() if ts else None
+        record = self.get_record(name)
+        return record.data.to_dataframe() if record else None
     
     def list(self) -> List[str]:
         """List all dataset names."""
@@ -333,6 +341,34 @@ class DataStore:
     def by_kind(self, kind: str) -> List[DatasetRecord]:
         """Return records matching a dataset kind."""
         return [record for record in self._records.values() if record.kind == kind]
+
+    def find(
+        self,
+        *,
+        kind: Optional[str] = None,
+        parent: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        **attrs,
+    ) -> List[DatasetRecord]:
+        """Find records by structured metadata instead of encoded names."""
+        parent_id = self._resolve_id(parent) if parent is not None else None
+        records = []
+        for record in self._records.values():
+            if kind is not None and record.kind != kind:
+                continue
+            if parent_id is not None and parent_id not in record.parent_ids:
+                continue
+            if tags and not set(tags).issubset(set(record.tags)):
+                continue
+            if any(record.attrs.get(key) != value for key, value in attrs.items()):
+                continue
+            records.append(record)
+        return records
+
+    def find_one(self, **query) -> Optional[DatasetRecord]:
+        """Return the newest matching record for a structured metadata query."""
+        matches = self.find(**query)
+        return matches[-1] if matches else None
 
     def raw(self) -> List[DatasetRecord]:
         """Return raw/root datasets."""
@@ -405,6 +441,7 @@ class DataStore:
                 "id": record.id,
                 "kind": record.kind,
                 "parent_ids": record.parent_ids,
+                "attrs": record.attrs,
                 "children": [child.id for child in self.children(record.id)],
                 "stale": record.stale,
                 "shape": record.data.shape,

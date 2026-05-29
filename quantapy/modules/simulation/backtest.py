@@ -12,6 +12,7 @@ from quantapy.registry.component_registry import register_component
 
 @register_component(category="Simulation", function="Backtest", source="Internal")
 class Backtest(BaseSimulation):
+    """Event-style long-only backtest simulation component."""
     
     config = {
       "title": "Backtest",
@@ -35,6 +36,7 @@ class Backtest(BaseSimulation):
     }
 
     def generate_signals(self, data, strategy):
+        """Evaluate strategy constraints on each bar and return signal rows."""
         constraints = strategy.constraints
         date_col = "date" if "date" in data.columns else None
         simulation_outputs = pd.DataFrame({
@@ -78,6 +80,7 @@ class Backtest(BaseSimulation):
             #if self.position[0] == None and self.transformed_data["signal"] = "enter":
                 
     def simulate_returns(self,simulation_outputs,data,strategy,initial_investment):
+        """Apply market orders to signals and build a portfolio equity curve."""
         
         orders = strategy.orders
         price_column = "close"
@@ -86,6 +89,7 @@ class Backtest(BaseSimulation):
         position = 0  # shares held
         entry_index = None
         entry_price = None
+        entry_shares = None
         portfolio_values = []
         actions = []
         positions = []
@@ -106,22 +110,28 @@ class Backtest(BaseSimulation):
                 cash = 0
                 entry_index = i
                 entry_price = executed_price
+                entry_shares = position
                 actions.append("buy")
             elif signal == "exit" and executed_price and position > 0:
                 cash = position * executed_price
-                position = 0
-                pnl = executed_price - entry_price
-                pnl_pct = (pnl / entry_price) * 100 if entry_price else 0
+                pnl_per_share = executed_price - entry_price
+                pnl = entry_shares * pnl_per_share
+                entry_value = entry_shares * entry_price
+                pnl_pct = (pnl / entry_value) * 100 if entry_value else 0
                 strategy.trades.append({
                     "entry_index": entry_index,
                     "exit_index": i,
                     "entry_price": entry_price,
                     "exit_price": executed_price,
+                    "shares": entry_shares,
+                    "pnl_per_share": pnl_per_share,
                     "pnl": pnl,
                     "pnl_pct": pnl_pct,
                 })
+                position = 0
                 entry_index = None
                 entry_price = None
+                entry_shares = None
                 actions.append("sell")
             else:
                 actions.append("hold")
@@ -132,6 +142,30 @@ class Backtest(BaseSimulation):
             portfolio_values.append(portfolio_value)
             positions.append(position)
             #print(current_price,portfolio_value)
+
+        close_col = self.params.get("close_on_completion")
+        if position > 0 and close_col in data.columns:
+            final_index = len(data) - 1
+            final_price = data.loc[final_index, close_col]
+            cash = position * final_price
+            pnl_per_share = final_price - entry_price
+            pnl = entry_shares * pnl_per_share
+            pnl_pct = (pnl / (entry_shares * entry_price)) * 100 if entry_price else 0
+            strategy.trades.append({
+                "entry_index": entry_index,
+                "exit_index": final_index,
+                "entry_price": entry_price,
+                "exit_price": final_price,
+                "shares": entry_shares,
+                "pnl_per_share": pnl_per_share,
+                "pnl": pnl,
+                "pnl_pct": pnl_pct,
+                "closed_on_completion": True,
+            })
+            actions[-1] = "sell"
+            portfolio_values[-1] = cash
+            positions[-1] = 0
+            position = 0
             
         simulation_outputs["portfolio_value"] = portfolio_values
         simulation_outputs["position"] = positions
@@ -140,8 +174,11 @@ class Backtest(BaseSimulation):
         return simulation_outputs
         
     def execute(self,data,strategy):
+        """Run signal generation and return simulation outputs."""
         
         initial_investment = self.params["initial_investment"]
+        if "date" in data.columns:
+            data = data.sort_values("date").reset_index(drop=True)
         simulation_outputs = self.generate_signals(data,strategy)
         simulation_outputs = self.simulate_returns(simulation_outputs,data,strategy,initial_investment)
         return simulation_outputs
@@ -164,6 +201,7 @@ class Backtest(BaseSimulation):
     
     # Use for trade permutation
     def execute_from_signals(self,signals):
+        """Run the simulation from a precomputed signal sequence."""
         
         #signals is simulation_outputs dataframe
         

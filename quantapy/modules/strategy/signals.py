@@ -65,6 +65,7 @@ class crossover(BaseSignal):
     }
     
     def check(self, df: pd.DataFrame, index: int = 0, value1: str = "close", value2: str = "close"):
+        """Return whether value1 crosses above value2 at the given row index."""
         
         value1 = self.params["value1"]
         value2 = self.params["value2"]
@@ -128,6 +129,7 @@ class crossunder(BaseSignal):
     }
     
     def check(self, df: pd.DataFrame, index: int = 0, value1: str = "close", value2: str = "close"):
+        """Return whether value1 crosses below value2 at the given row index."""
         
         value1 = self.params["value1"]
         value2 = self.params["value2"]

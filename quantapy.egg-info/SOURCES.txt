@@ -24,7 +24,6 @@ quantapy/data/providers/fmp_ohlc.py
 quantapy/gui/__init__.py
 quantapy/gui/cli.py
 quantapy/gui/strategy_example.py
-quantapy/gui/target_cli.py
 quantapy/modules/__init__.py
 quantapy/modules/calculator/__init__.py
 quantapy/modules/calculator/custom.py

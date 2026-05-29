@@ -5,9 +5,11 @@ from quantapy.core.events import MarketEvent
 
 
 class EventNormalizer:
+    """Convert provider-specific payloads into normalized market events."""
 
     @staticmethod
     def parse_timestamp(value):
+        """Parse supported timestamp values into ``datetime`` objects."""
 
         # already datetime
         if isinstance(value, datetime):
@@ -29,6 +31,7 @@ class EventNormalizer:
         source: str,
         dataset: str,
     ) -> List[MarketEvent]:
+        """Convert FMP-style OHLC rows into ``MarketEvent`` instances."""
 
         events = []
 

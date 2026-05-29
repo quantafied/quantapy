@@ -22,6 +22,7 @@ class CustomDataFrame(pd.DataFrame):
     _metadata = ['transforms']
     
     def __init__(self, *args, **kwargs):
+        """Create a DataFrame that tracks applied transforms."""
         super().__init__(*args, **kwargs)
         self.transforms = []  # Custom attribute to store transformations
     
@@ -30,11 +31,13 @@ class CustomDataFrame(pd.DataFrame):
         return CustomDataFrame
 
     def add_transform(self, *args, **kwargs):
+        """Apply and remember a transform on this DataFrame."""
         transform = Transform(self)
         transform.compute(*args, **kwargs)
         self.transforms.append(transform)
         return transform
     
     def save(self):
+        """Placeholder persistence hook for transformed data."""
         print("Hello")
         
