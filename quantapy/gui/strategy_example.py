@@ -21,14 +21,16 @@ from quantapy.core.timeseries import DataStore, TimeSeries
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 # Load all plugins
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/strategy")
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/simulation")
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/data")
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/data/providers")
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/calculator")
-load_plugins_from_folder("/Users/andysimin/Desktop/projects/quantapy/quantapy/modules/study")
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+load_plugins_from_folder(str(PACKAGE_ROOT / "modules" / "strategy"))
+load_plugins_from_folder(str(PACKAGE_ROOT / "modules" / "simulation"))
+load_plugins_from_folder(str(PACKAGE_ROOT / "modules" / "data"))
+load_plugins_from_folder(str(PACKAGE_ROOT / "data" / "providers"))
+load_plugins_from_folder(str(PACKAGE_ROOT / "modules" / "calculator"))
+load_plugins_from_folder(str(PACKAGE_ROOT / "modules" / "study"))
 
 data = Data()
 data.add_provider("Market", "OHLC", "FMP", source_ids=["AAPL"], interval="1hour", period="3mo")

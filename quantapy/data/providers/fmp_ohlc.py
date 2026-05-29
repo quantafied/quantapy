@@ -5,6 +5,7 @@ Returns columnar OHLC (Open, High, Low, Close) data for stocks.
 Works with the generic data pipeline (Financial is just a domain, not special).
 """
 import requests
+import os
 from typing import Dict, List, Optional, Any
 
 from quantapy.data.providers.base import BaseProvider
@@ -25,7 +26,7 @@ class OHLC(BaseProvider):
     def __init__(self, **kwargs):
         """Initialize FMP provider parameters and defaults."""
         super().__init__(**kwargs)
-        self.api_key = "sNfN2hHaQDfQj5lsxdS93VLuAGXk8JRA"
+        self.api_key = self.params.get("api_key") or os.getenv("FMP_API_KEY")
         
         # Accept both new 'source_ids' and legacy 'ticker' parameter names
         if "source_ids" not in self.params and "ticker" in self.params:
@@ -37,6 +38,11 @@ class OHLC(BaseProvider):
 
     def fetch_raw(self, symbol: str) -> List[Dict]:
         """Fetch raw OHLC data for a symbol from FMP."""
+        if not self.api_key:
+            raise RuntimeError(
+                "FMP API key is required. Set FMP_API_KEY or pass api_key=..."
+            )
+
         interval = self.params.get("interval", "1hour").replace(" ", "")
         
         url = (
@@ -48,13 +54,13 @@ class OHLC(BaseProvider):
         try:
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
-                return self._sort_chronological(r.json())
-            else:
-                print(f"Warning: FMP returned {r.status_code} for {symbol}")
-                return []
+                rows = self._sort_chronological(r.json())
+                if not rows:
+                    raise RuntimeError(f"FMP returned no rows for {symbol}")
+                return rows
+            raise RuntimeError(f"FMP returned {r.status_code} for {symbol}: {r.text[:200]}")
         except Exception as e:
-            print(f"Error fetching {symbol}: {e}")
-            return []
+            raise RuntimeError(f"Error fetching {symbol}: {e}") from e
 
     def _sort_chronological(self, rows: List[Dict]) -> List[Dict]:
         """Return FMP rows ordered oldest to newest when a date column exists."""

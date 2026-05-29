@@ -43,6 +43,10 @@ class Simulate():
         
     def add(self, registered: str, function: str, source: str = "Internal", **kwargs):
         """Instantiate and register a simulation component from the registry."""
+        if self.simulations:
+            raise ValueError(
+                "Simulate currently supports one simulation component per orchestrator"
+            )
         
         # Get the class from the registry
         transform_class = COMPONENT_REGISTRY[registered][function][source]
@@ -91,6 +95,8 @@ class Simulate():
             raise ValueError("Simulate.execute requires a DataStore")
         if not self.simulations:
             raise ValueError("No simulations registered")
+        if len(self.simulations) != 1:
+            raise ValueError("Simulate.execute expects exactly one simulation component")
 
         df = active_store.to_dataframe(dataset_name)
         if df is None:

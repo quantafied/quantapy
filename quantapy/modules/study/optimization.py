@@ -232,7 +232,7 @@ class bayesian(BaseStudy):
             return self._run_objective(
                 study,
                 source_dataset,
-                derived_name,
+                f"{derived_name}-ObjectiveScratch",
                 metric_names,
                 directions,
                 attrs={**run_attrs, "split": "full"},
@@ -336,7 +336,7 @@ class bayesian(BaseStudy):
                 return self._run_objective(
                     study,
                     train_source,
-                    train_derived,
+                    f"{train_derived}-ObjectiveScratch",
                     metric_names,
                     directions,
                     attrs={**fold_attrs, "split": "train"},
@@ -356,16 +356,25 @@ class bayesian(BaseStudy):
             )
 
             self._apply_trial_params(selected_trial, study)
-            full_indicators = study.calculator.derive_combined(study.store, sorted_source)
+            test_end = self._range_end(df, test_range)
+            context_source = f"{source_dataset}-Fold{fold_index}-TestContext"
+            context_df = df.iloc[:test_end + 1].reset_index(drop=True)
+            study.store.add_child(
+                context_source,
+                context_df,
+                parent_ids=[sorted_source],
+                kind="validation",
+                attrs={**fold_attrs, "split": "test", "artifact": "context_source"},
+            )
+            full_indicators = study.calculator.derive_combined(study.store, context_source)
             if hasattr(full_indicators, "to_dataframe"):
                 full_indicators = full_indicators.to_dataframe()
             context_start = max(test_range[0] - 1, 0)
-            test_end = self._range_end(df, test_range)
             test_indicators = full_indicators.iloc[context_start:test_end + 1].reset_index(drop=True)
             study.store.add_child(
                 test_derived,
                 test_indicators,
-                parent_ids=[sorted_source, test_source],
+                parent_ids=[context_source, test_source],
                 kind="derived",
                 attrs={**fold_attrs, "split": "test", "artifact": "indicators"},
                 transform={

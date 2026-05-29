@@ -92,9 +92,15 @@ class Data:
 
             if isinstance(result, dict):
                 for source_id, data in result.items():
+                    if data is None or (isinstance(data, list) and not data):
+                        raise ValueError(
+                            f"Provider '{provider_name}' returned no data for '{source_id}'"
+                        )
                     dataset_name = f"{provider_name}_{source_id}"
                     outputs[dataset_name] = data
             else:
+                if result is None or (isinstance(result, list) and not result):
+                    raise ValueError(f"Provider '{provider_name}' returned no data")
                 # Single dataset result
                 outputs[provider_name] = result
 

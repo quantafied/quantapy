@@ -47,13 +47,18 @@ def infer_periods_per_year(index: pd.Series | pd.DatetimeIndex) -> int:
     Infer annualization factor from datetime index frequency.
     """
 
-    if not isinstance(index, pd.DatetimeIndex):
+    if isinstance(index, pd.Series):
+        index = pd.DatetimeIndex(pd.to_datetime(index))
+    elif not isinstance(index, pd.DatetimeIndex):
         return 252
 
     if len(index) < 2:
         return 252
 
-    delta = (index[1] - index[0]).total_seconds()
+    deltas = index.to_series().diff().dropna().dt.total_seconds()
+    if deltas.empty:
+        return 252
+    delta = deltas.median()
 
     # Approximate frequency detection
     minute = 60
