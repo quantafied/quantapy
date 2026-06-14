@@ -17,9 +17,11 @@ quantapy/core/base_transform.py
 quantapy/core/dataset.py
 quantapy/core/normalizer.py
 quantapy/core/timeseries.py
+quantapy/core/workspace.py
 quantapy/data/__init__.py
 quantapy/data/providers/__init__.py
 quantapy/data/providers/base.py
+quantapy/data/providers/csv_ohlc.py
 quantapy/data/providers/fmp_ohlc.py
 quantapy/gui/__init__.py
 quantapy/gui/cli.py

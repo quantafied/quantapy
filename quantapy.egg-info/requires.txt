@@ -6,3 +6,9 @@ TA-Lib
 requests
 scikit-learn
 matplotlib
+fastapi
+uvicorn[standard]
+python-multipart
+pyarrow
+httpx
+pydantic-settings

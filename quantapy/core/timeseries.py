@@ -205,6 +205,25 @@ class DataStore:
         self._records: Dict[str, DatasetRecord] = {}
         self._name_to_id: Dict[str, str] = {}
 
+    _NAVIGATION_ORDER = {
+        "raw": 0,
+        "synthetic": 1,
+        "derived": 2,
+        "validation": 3,
+        "backtest": 4,
+        "metrics": 5,
+        "study": 6,
+    }
+
+    _INTERNAL_ARTIFACTS = {
+        "context_source",
+        "ordered_source",
+        "portfolio_outputs",
+        "portfolio_metrics",
+        "selected_trial",
+        "optimization_trials",
+    }
+
     @property
     def _datasets(self) -> Dict[str, TimeSeries]:
         """Backward-compatible view of datasets by name."""
@@ -369,6 +388,151 @@ class DataStore:
         """Return the newest matching record for a structured metadata query."""
         matches = self.find(**query)
         return matches[-1] if matches else None
+
+    def label(self, record: Union[str, DatasetRecord]) -> str:
+        """Return a short human-readable label for a record."""
+        record = self.get_record(record) if not isinstance(record, DatasetRecord) else record
+        if record is None:
+            return ""
+
+        artifact = record.attrs.get("artifact")
+        fold = record.attrs.get("fold")
+        split = record.attrs.get("split")
+        phase = record.attrs.get("phase")
+
+        if artifact == "source" and split:
+            return f"Fold {fold} {str(split).title()} Source"
+        if artifact == "context_source":
+            return f"Fold {fold} Test Context"
+        if artifact == "ordered_source":
+            return "Validation Ordered Source"
+        if artifact == "indicators":
+            base = record.attrs.get("indicator_set")
+            if base is None and record.transform:
+                base = record.transform.get("name")
+            label = str(base or "Indicators")
+            if fold is not None:
+                label = f"Fold {fold} {str(split or '').title()} {label}".strip()
+            return label
+        if artifact == "calculator":
+            source = record.attrs.get("source_record_name")
+            label = f"Calculator: {source}" if source else "Calculator"
+            if fold is not None:
+                label = f"Fold {fold} {str(split or '').title()} {label}".strip()
+            return label
+        if artifact == "backtest":
+            label = "Backtest"
+            if phase:
+                label = f"{str(phase).title()} {label}"
+            if fold is not None:
+                label = f"Fold {fold} {str(split or '').title()} {label}".strip()
+            return label
+        if artifact == "portfolio_outputs":
+            return "Portfolio Outputs"
+        if artifact == "portfolio_metrics":
+            return "Portfolio Metrics"
+        if artifact == "optimization_trials":
+            return f"Fold {fold} Optimization Trials" if fold is not None else "Optimization Trials"
+        if artifact == "selected_trial":
+            return f"Fold {fold} Selected Trial" if fold is not None else "Selected Trial"
+        return record.name
+
+    def is_internal(self, record: Union[str, DatasetRecord]) -> bool:
+        """Return True for implementation artifacts that should be nested by default."""
+        record = self.get_record(record) if not isinstance(record, DatasetRecord) else record
+        if record is None:
+            return False
+        artifact = record.attrs.get("artifact")
+        if artifact in self._INTERNAL_ARTIFACTS:
+            return True
+        if record.kind == "validation":
+            return True
+        if record.attrs.get("run_id") is not None:
+            return True
+        if record.attrs.get("internal") is True:
+            return True
+        if record.name.endswith("ObjectiveScratch"):
+            return True
+        return False
+
+    def visible_records(self) -> List[DatasetRecord]:
+        """Return records that should appear in a high-level user navigation view."""
+        return [record for record in self.records() if not self.is_internal(record)]
+
+    def record_view(self, record: Union[str, DatasetRecord]) -> Dict[str, Any]:
+        """Return structured metadata for API/GUI navigation."""
+        record = self.get_record(record) if not isinstance(record, DatasetRecord) else record
+        if record is None:
+            return {}
+        return {
+            "id": record.id,
+            "name": record.name,
+            "label": self.label(record),
+            "kind": record.kind,
+            "artifact": record.attrs.get("artifact"),
+            "run_id": record.attrs.get("run_id"),
+            "fold": record.attrs.get("fold"),
+            "split": record.attrs.get("split"),
+            "phase": record.attrs.get("phase"),
+            "internal": self.is_internal(record),
+            "shape": record.data.shape,
+            "columns": record.data.columns,
+            "attrs": record.attrs,
+            "parent_ids": record.parent_ids,
+            "child_ids": [child.id for child in self.children(record.id)],
+        }
+
+    def navigation(self, include_internal: bool = False) -> List[Dict[str, Any]]:
+        """Return a lineage tree intended for user interfaces.
+
+        The store remains a complete artifact registry, but this view keeps
+        implementation details nested under their parents instead of presenting
+        every fold, metric table, trial table, and scratch dataset as a peer.
+        """
+        records = self.records() if include_internal else self.visible_records()
+        allowed = {record.id for record in records}
+
+        def sort_key(item: DatasetRecord) -> Tuple[int, str]:
+            return (self._NAVIGATION_ORDER.get(item.kind, 99), self.label(item))
+
+        def build(record: DatasetRecord) -> Dict[str, Any]:
+            view = self.record_view(record)
+            child_records = [
+                child for child in self.children(record.id)
+                if include_internal or child.id in allowed
+            ]
+            view["children"] = [build(child) for child in sorted(child_records, key=sort_key)]
+            return view
+
+        roots = [
+            record for record in records
+            if not record.parent_ids or not any(parent_id in allowed for parent_id in record.parent_ids)
+        ]
+        return [build(record) for record in sorted(roots, key=sort_key)]
+
+    def study_runs(self, include_artifacts: bool = True) -> List[Dict[str, Any]]:
+        """Return records grouped by study/optimization run id."""
+        runs: Dict[str, List[DatasetRecord]] = {}
+        for record in self.records():
+            run_id = record.attrs.get("run_id")
+            if run_id is not None:
+                runs.setdefault(str(run_id), []).append(record)
+
+        output = []
+        for run_id, records in runs.items():
+            folds = sorted({
+                record.attrs.get("fold")
+                for record in records
+                if record.attrs.get("fold") is not None
+            })
+            artifacts = [self.record_view(record) for record in records] if include_artifacts else []
+            output.append({
+                "run_id": run_id,
+                "label": f"Study {run_id[:8]}",
+                "folds": folds,
+                "artifacts": artifacts,
+            })
+        return sorted(output, key=lambda run: run["run_id"])
 
     def raw(self) -> List[DatasetRecord]:
         """Return raw/root datasets."""

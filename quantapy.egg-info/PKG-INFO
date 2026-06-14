@@ -20,6 +20,12 @@ Requires-Dist: TA-Lib
 Requires-Dist: requests
 Requires-Dist: scikit-learn
 Requires-Dist: matplotlib
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: python-multipart
+Requires-Dist: pyarrow
+Requires-Dist: httpx
+Requires-Dist: pydantic-settings
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier

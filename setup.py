@@ -19,7 +19,13 @@ setup(
     "TA-Lib",
     "requests",
     "scikit-learn",
-    "matplotlib"
+    "matplotlib",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "pyarrow",
+    "httpx",
+    "pydantic-settings",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -28,4 +34,3 @@ setup(
     ],
     python_requires='>=3.8',
 )
-

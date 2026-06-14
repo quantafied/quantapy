@@ -10,6 +10,17 @@ import random
 import optuna
 import numpy as np
 from uuid import uuid4
+import copy
+from quantapy.core.executions import ExecutionRun
+from quantapy.core.optimization import ExecutorObjectiveRunner, ObjectiveSpec
+from quantapy.core.runners import ExecutionSpecRunner
+from quantapy.executors.trading import (
+    BacktestExecutor,
+    backtest_spec,
+)
+from quantapy.core.results import ResultArtifact
+from quantapy.modules.evaluation.portfolio import PortfolioAnalytics
+from quantapy.preparation import CalculatorInputPreparer
 
 """
 json_schema_exra:
@@ -124,6 +135,177 @@ class bayesian(BaseStudy):
             values.append(float(value))
         return values[0] if len(values) == 1 else tuple(values)
 
+    def _failure_score(self, directions):
+        """Return objective values that make a failed trial unattractive."""
+        values = [-1e12 if direction == "maximize" else 1e12 for direction in directions]
+        return values[0] if len(values) == 1 else tuple(values)
+
+    def _objective_runner(self, study, metric_names, directions):
+        """Build a generic executor-backed objective runner."""
+        executor = (
+            BacktestExecutor(store=study.store)
+            if getattr(study, "execution_config", None)
+            else BacktestExecutor(study.simulation)
+        )
+        return ExecutorObjectiveRunner(
+            ExecutionSpecRunner({"trading.backtest": executor}),
+            ObjectiveSpec(metric_names=list(metric_names), directions=list(directions)),
+        )
+
+    def _executor(self, study):
+        """Return the executor adapter for the selected study execution mode."""
+        return (
+            BacktestExecutor(store=study.store)
+            if getattr(study, "execution_config", None)
+            else BacktestExecutor(study.simulation)
+        )
+
+    def _run_spec(self, study, spec):
+        """Run and optionally record an execution spec launched by optimization."""
+        project = getattr(study, "project", None)
+        if project is not None:
+            project.add_execution_spec(spec)
+        bundle = ExecutionSpecRunner({"trading.backtest": self._executor(study)}).run(spec)
+        if not bundle.metrics and bundle.artifact("events") is not None:
+            self._attach_default_evaluation(study, spec, bundle)
+        if project is not None:
+            output_ids = [
+                record.id
+                for record in study.store.records()
+                if record.attrs.get("execution_spec_id") == spec.id
+            ]
+            run = project.record_execution_run(
+                ExecutionRun(
+                    spec_id=spec.id,
+                    runner=spec.runner,
+                    status="complete",
+                    input_ids=[binding.id for binding in spec.inputs],
+                    output_ids=output_ids,
+                    metrics=bundle.metrics,
+                    summary=bundle.summary,
+                    attrs=spec.attrs,
+                )
+            )
+            bundle.run_id = run.id
+        return bundle
+
+    def _attach_default_evaluation(self, study, spec, bundle):
+        """Attach default portfolio evaluation artifacts for optimization scoring."""
+        events = bundle.artifact("events")
+        if events is None or not {"date", "portfolio_value"}.issubset(set(events.data.columns)):
+            return
+        outputs, metrics = PortfolioAnalytics(events.data[["date", "portfolio_value"]]).compute()
+        bundle.metrics = metrics.to_dict(orient="records")[0]
+        evaluation_artifacts = [
+            ResultArtifact(
+                role="portfolio_series",
+                artifact_type="timeseries",
+                kind="metrics",
+                name=f"{spec.name}-Portfolio-Outputs",
+                data=outputs,
+                attrs={**spec.attrs, "artifact": "portfolio_outputs"},
+                transform={"name": "trading.portfolio_metrics", "output": "timeseries"},
+            ),
+            ResultArtifact(
+                role="metrics",
+                artifact_type="scalar_map",
+                kind="metrics",
+                name=f"{spec.name}-Portfolio-Metrics",
+                data=metrics,
+                attrs={**spec.attrs, "artifact": "portfolio_metrics"},
+                transform={"name": "trading.portfolio_metrics", "output": "summary"},
+            ),
+        ]
+        bundle.artifacts.extend(evaluation_artifacts)
+        if study.store is not None:
+            parent_id = events.name or spec.primary_input_id
+            for artifact in evaluation_artifacts:
+                study.store.add_child(
+                    artifact.name,
+                    artifact.data,
+                    parent_ids=[parent_id],
+                    kind=artifact.kind,
+                    attrs=artifact.attrs,
+                    transform=artifact.transform,
+                )
+
+    def _input_preparer(self, study):
+        """Build the input preparer for this optimizer bridge."""
+        return CalculatorInputPreparer(study.store, study.calculator)
+
+    def _apply_data_parameter(self, study, parameter, value):
+        """Apply a trial value to upstream data-preparation config."""
+        if parameter.target.lower() not in {"transform", "calculator"}:
+            return
+        if study.calculator is None:
+            raise ValueError("Calculator is required to optimize transform parameters")
+        if parameter.name not in study.calculator.transforms:
+            raise ValueError(f"Transform '{parameter.name}' not found")
+        study.calculator.transforms[parameter.name]["params"][parameter.param] = value
+
+    def _trial_updates(self, trial, study):
+        """Suggest all study parameters and patch data-prep config immediately."""
+        updates = []
+        for parameter in study.parameters:
+            value = self._suggest_parameter(trial, parameter)
+            self._apply_data_parameter(study, parameter, value)
+            updates.append((parameter, value))
+        return updates
+
+    def _selected_updates(self, selected_trial, study):
+        """Return selected trial values matched to study parameter objects."""
+        updates = []
+        for key, value in selected_trial.params.items():
+            for parameter in study.parameters:
+                if key == self._parameter_label(parameter):
+                    self._apply_data_parameter(study, parameter, value)
+                    updates.append((parameter, value))
+        return updates
+
+    def _execution_config(self, study, mode, updates=None, selected_params=None):
+        """Return an executor config document patched with non-transform params."""
+        config = copy.deepcopy(getattr(study, "execution_config", None) or {"domain": "trading"})
+        config["mode"] = mode
+        if selected_params:
+            config["selected_params"] = dict(selected_params)
+        for parameter, value in updates or []:
+            self._apply_config_parameter(config, parameter, value)
+        return config
+
+    def _apply_config_parameter(self, config, parameter, value):
+        """Apply a non-transform optimization parameter to an executor config."""
+        target = parameter.target.lower()
+        if target in {"transform", "calculator"}:
+            return
+        if target == "signal":
+            component = self._select_config_component(config.get("strategy", {}).get("signals", []), parameter)
+        elif target == "order":
+            component = self._select_config_component(config.get("strategy", {}).get("orders", []), parameter)
+        elif target == "simulation":
+            component = config.get("simulation")
+        elif target in {"evaluation", "evaluator"}:
+            component = config.get("evaluation")
+        else:
+            raise ValueError(f"Unsupported optimization target '{parameter.target}'")
+        if component is None:
+            raise ValueError(f"No config component found for target '{parameter.target}'")
+        component.setdefault("params", {})[parameter.param] = value
+
+    def _select_config_component(self, components, parameter):
+        """Select a config component by index or name."""
+        if parameter.index is not None:
+            return components[parameter.index]
+        return next(
+            (
+                component
+                for component in components
+                if component.get("name") == parameter.name
+                or component.get("params", {}).get("name") == parameter.name
+                or component.get("function") == parameter.name
+            ),
+            None,
+        )
+
     def _create_study(self, directions):
         """Create an Optuna study using configured storage."""
         storage = self.params["storage"]
@@ -159,53 +341,56 @@ class bayesian(BaseStudy):
 
     def _apply_trial_params(self, selected_trial, study):
         """Apply selected trial parameters to the study pipeline."""
-        for key, value in selected_trial.params.items():
-            for parameter in study.parameters:
-                if key == self._parameter_label(parameter):
-                    study._apply_parameter(parameter, value)
+        self._selected_updates(selected_trial, study)
 
-    def _run_objective(self, study, source_dataset, derived_name, metric_names, directions, attrs=None):
-        """Derive indicators, run simulation, and return objective values."""
-        indicators = study.calculator.derive_combined(study.store, source_dataset)
-        study.store.add_child(
+    def _run_objective(self, study, source_dataset, derived_name, metric_names, directions, attrs=None, updates=None):
+        """Prepare trial input, run executor, and return objective values."""
+        prepared = self._input_preparer(study).prepare(
+            source_dataset,
             derived_name,
-            indicators,
-            parent_ids=[source_dataset],
-            kind="derived",
-            attrs={**(attrs or {}), "artifact": "indicators"},
-            transform={
-                "name": "OptimizedIndicators",
-                "transforms": study.calculator.list_transforms(),
-            },
+            attrs=attrs,
         )
-
-        _, _, metrics = study.simulation.execute(
-            dataset_name=derived_name,
+        runner = self._objective_runner(study, metric_names, directions)
+        spec = backtest_spec(
+            prepared.input_id,
             name=f"{derived_name}-OptimizationBacktest",
             attrs={**(attrs or {}), "phase": "optimization"},
+            config=self._execution_config(study, "objective", updates=updates),
         )
-        return self._score_metrics(metrics, metric_names, directions)
+        if getattr(study, "project", None) is not None:
+            bundle = self._run_spec(study, spec)
+            score = runner.score(bundle.metrics)
+        else:
+            score, _ = runner.run(spec)
+        return score
 
     def _run_selected(self, study, source_dataset, derived_name, backtest_name, selected_trial, attrs=None):
-        """Apply selected params, derive indicators, and run simulation/evaluation."""
-        self._apply_trial_params(selected_trial, study)
-        indicators = study.calculator.derive_combined(study.store, source_dataset)
-        study.store.add_child(
+        """Apply selected params, prepare input, and run executor/evaluation."""
+        updates = self._selected_updates(selected_trial, study)
+        prepared = self._input_preparer(study).prepare(
+            source_dataset,
             derived_name,
-            indicators,
-            parent_ids=[source_dataset],
-            kind="derived",
-            attrs={**(attrs or {}), "artifact": "indicators"},
-            transform={
-                "name": "OptimizedIndicators",
-                "transforms": study.calculator.list_transforms(),
-                "selected_params": selected_trial.params,
-            },
+            attrs=attrs,
+            selected_params=selected_trial.params,
         )
-        return study.simulation.execute(
-            dataset_name=derived_name,
-            name=backtest_name,
-            attrs={**(attrs or {}), "phase": "selected"},
+        bundle = self._run_spec(
+            study,
+            backtest_spec(
+                    prepared.input_id,
+                    name=backtest_name,
+                    attrs={**(attrs or {}), "phase": "selected"},
+                    config=self._execution_config(
+                        study,
+                        "selected",
+                        updates=updates,
+                        selected_params=selected_trial.params,
+                    ),
+                )
+        )
+        return (
+            bundle.artifact("events").data if bundle.artifact("events") else None,
+            bundle.artifact("portfolio_series").data if bundle.artifact("portfolio_series") else None,
+            pd.DataFrame([bundle.metrics]) if bundle.metrics else None,
         )
 
     def execute_parameters(
@@ -225,18 +410,20 @@ class bayesian(BaseStudy):
         run_attrs = {"run_id": run_id}
 
         def objective(trial):
-            for parameter in study.parameters:
-                value = self._suggest_parameter(trial, parameter)
-                study._apply_parameter(parameter, value)
+            updates = self._trial_updates(trial, study)
 
-            return self._run_objective(
-                study,
-                source_dataset,
-                f"{derived_name}-ObjectiveScratch",
-                metric_names,
-                directions,
-                attrs={**run_attrs, "split": "full"},
-            )
+            try:
+                return self._run_objective(
+                    study,
+                    source_dataset,
+                    f"{derived_name}-ObjectiveScratch",
+                    metric_names,
+                    directions,
+                    attrs={**run_attrs, "split": "full"},
+                    updates=updates,
+                )
+            except Exception:
+                return self._failure_score(directions)
 
         optuna_study = self._create_study(directions)
         optuna_study.optimize(objective, n_trials=self.params["trials"])
@@ -330,17 +517,19 @@ class bayesian(BaseStudy):
             )
 
             def objective(trial):
-                for parameter in study.parameters:
-                    value = self._suggest_parameter(trial, parameter)
-                    study._apply_parameter(parameter, value)
-                return self._run_objective(
-                    study,
-                    train_source,
-                    f"{train_derived}-ObjectiveScratch",
-                    metric_names,
-                    directions,
-                    attrs={**fold_attrs, "split": "train"},
-                )
+                updates = self._trial_updates(trial, study)
+                try:
+                    return self._run_objective(
+                        study,
+                        train_source,
+                        f"{train_derived}-ObjectiveScratch",
+                        metric_names,
+                        directions,
+                        attrs={**fold_attrs, "split": "train"},
+                        updates=updates,
+                    )
+                except Exception:
+                    return self._failure_score(directions)
 
             optuna_study = self._create_study(directions)
             optuna_study.optimize(objective, n_trials=self.params["trials"])
@@ -355,7 +544,7 @@ class bayesian(BaseStudy):
                 attrs={**fold_attrs, "split": "train"},
             )
 
-            self._apply_trial_params(selected_trial, study)
+            updates = self._selected_updates(selected_trial, study)
             test_end = self._range_end(df, test_range)
             context_source = f"{source_dataset}-Fold{fold_index}-TestContext"
             context_df = df.iloc[:test_end + 1].reset_index(drop=True)
@@ -371,24 +560,36 @@ class bayesian(BaseStudy):
                 full_indicators = full_indicators.to_dataframe()
             context_start = max(test_range[0] - 1, 0)
             test_indicators = full_indicators.iloc[context_start:test_end + 1].reset_index(drop=True)
-            study.store.add_child(
+            prepared_test = self._input_preparer(study).prepare_from_dataframe(
+                context_source,
                 test_derived,
                 test_indicators,
                 parent_ids=[context_source, test_source],
-                kind="derived",
-                attrs={**fold_attrs, "split": "test", "artifact": "indicators"},
-                transform={
-                    "name": "OptimizedIndicators",
-                    "transforms": study.calculator.list_transforms(),
-                    "selected_params": selected_trial.params,
+                attrs={**fold_attrs, "split": "test"},
+                selected_params=selected_trial.params,
+                transform_metadata={
                     "context_start": context_start,
                     "test_start": test_range[0],
                 },
             )
-            test_results = study.simulation.execute(
-                dataset_name=test_derived,
-                name=f"{test_derived}-SelectedBacktest",
-                attrs={**fold_attrs, "split": "test", "phase": "selected"},
+            test_bundle = self._run_spec(
+                study,
+                backtest_spec(
+                    prepared_test.input_id,
+                    name=f"{test_derived}-SelectedBacktest",
+                    attrs={**fold_attrs, "split": "test", "phase": "selected"},
+                    config=self._execution_config(
+                        study,
+                        "selected",
+                        updates=updates,
+                        selected_params=selected_trial.params,
+                    ),
+                )
+            )
+            test_results = (
+                test_bundle.artifact("events").data if test_bundle.artifact("events") else None,
+                test_bundle.artifact("portfolio_series").data if test_bundle.artifact("portfolio_series") else None,
+                pd.DataFrame([test_bundle.metrics]) if test_bundle.metrics else None,
             )
 
             trials_df = optuna_study.trials_dataframe()

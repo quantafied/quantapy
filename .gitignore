@@ -1,1 +1,6 @@
-./env
+.env/
+env/
+__pycache__/
+*.py[cod]
+apps/web/node_modules/
+apps/web/dist/

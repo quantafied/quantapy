@@ -1,4 +1,5 @@
 VALID_COMPONENT_CATEGORIES = {
+    "Dataset",
     "Market",
     "Technical",
     "Noise",
@@ -19,8 +20,7 @@ VALID_COMPONENT_CATEGORIES = {
     "Best Trial"
 }
 
-DATA_CATEGORIES = ["Market"]
+DATA_CATEGORIES = ["Dataset", "Market"]
 
 CALCULATOR_CATEGORIES = {"Technical",
                          "Math"}
-
